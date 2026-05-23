@@ -67,7 +67,7 @@ async function fetchRecent(): Promise<RecentMessage[]> {
     .select("id, telefono_destino, mensaje, estado, enviado_at, nombre_cliente")
     .order("enviado_at", { ascending: false })
     .limit(10);
-  return (data ?? []) as unknown as RecentMessage[];
+  return (data ?? []) as RecentMessage[];
 }
 
 function DashboardPage() {
