@@ -18,25 +18,25 @@ export const Route = createFileRoute("/messages")({
 
 interface MessageRow {
   id: string;
-  wamid: string | null;
-  recipient_phone: string;
-  message_body: string;
-  status: string;
-  sent_at: string;
+  whatsapp_message_id: string | null;
+  telefono_destino: string;
+  mensaje: string;
+  estado: string;
+  enviado_at: string | null;
   updated_at: string | null;
-  contacts: { name: string } | null;
+  nombre_cliente: string;
+  clientes: { nombre: string; apellidos: string } | null;
 }
 
-async function fetchMensajes() {
+async function fetchMensajes(): Promise<MessageRow[]> {
   const { data, error } = await supabase
     .from("mensajes_whatsapp")
     .select("id, whatsapp_message_id, telefono_destino, mensaje, estado, enviado_at, updated_at, nombre_cliente, clientes(nombre, apellidos)")
-    .order("created_at", { ascending: false })
+    .order("enviado_at", { ascending: false })
     .limit(200);
   if (error) throw error;
   return data ?? [];
 }
-
 
 function MessagesPage() {
   const qc = useQueryClient();
@@ -50,7 +50,7 @@ function MessagesPage() {
       .channel("messages-log-realtime")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "messages" },
+        { event: "*", schema: "public", table: "mensajes_whatsapp" },
         () => {
           qc.invalidateQueries({ queryKey: ["messages-log"] });
         },
@@ -93,22 +93,22 @@ function MessagesPage() {
                   <tr key={m.id} className="hover:bg-muted/20">
                     <td className="px-5 py-3 align-top">
                       <div className="font-medium">
-                        {m.contacts?.name ?? "—"}
+                        {m.clientes ? `${m.clientes.nombre} ${m.clientes.apellidos}` : m.nombre_cliente}
                       </div>
                       <div className="text-xs font-mono text-muted-foreground">
-                        {m.recipient_phone}
+                        {m.telefono_destino}
                       </div>
                     </td>
                     <td className="px-5 py-3 align-top max-w-md">
                       <p className="line-clamp-2 text-muted-foreground">
-                        {m.message_body}
+                        {m.mensaje}
                       </p>
                     </td>
                     <td className="px-5 py-3 align-top">
-                      <StatusBadge status={m.status} />
+                      <StatusBadge status={m.estado} />
                     </td>
                     <td className="px-5 py-3 align-top text-muted-foreground whitespace-nowrap text-xs">
-                      {new Date(m.sent_at).toLocaleString()}
+                      {m.enviado_at ? new Date(m.enviado_at).toLocaleString() : "—"}
                     </td>
                   </tr>
                 ))}
