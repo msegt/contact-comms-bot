@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { z } from "zod";
 import { toast } from "sonner";
-import { Plus, Send, Trash2, Phone, X, Loader2, UsersRound } from "lucide-react";
+import { Plus, Send, Trash2, Phone, X, Loader2, UsersRound, AlertCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/Skeleton";
 import { sendWhatsAppMessage } from "@/lib/whatsapp.functions";
@@ -47,7 +47,7 @@ async function fetchClientes(): Promise<Cliente[]> {
 
 function ContactsPage() {
   const qc = useQueryClient();
-  const { data, isLoading } = useQuery({ queryKey: ["contacts"], queryFn: fetchClientes });
+  const { data, isLoading, error } = useQuery({ queryKey: ["contacts"], queryFn: fetchClientes });
   const [composeFor, setComposeFor] = useState<Cliente | null>(null);
   const [nombre, setNombre] = useState("");
   const [apellidos, setApellidos] = useState("");
@@ -157,6 +157,22 @@ function ContactsPage() {
             {Array.from({ length: 4 }).map((_, i) => (
               <Skeleton key={i} className="h-12 w-full" />
             ))}
+          </div>
+        ) : error ? (
+          <div className="p-8 text-center">
+            <div className="mx-auto grid place-items-center h-12 w-12 rounded-full bg-destructive/10 text-destructive mb-3">
+              <AlertCircle className="h-6 w-6" />
+            </div>
+            <p className="text-sm font-medium text-destructive">Failed to load contacts</p>
+            <p className="text-xs text-muted-foreground mt-2 mb-4">
+              {error instanceof Error ? error.message : "An error occurred while loading contacts."}
+            </p>
+            <button
+              onClick={() => qc.invalidateQueries({ queryKey: ["contacts"] })}
+              className="inline-flex items-center gap-2 h-9 px-3 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90"
+            >
+              Try again
+            </button>
           </div>
         ) : data && data.length > 0 ? (
           <ul className="divide-y divide-border">
