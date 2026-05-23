@@ -3,7 +3,16 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { z } from "zod";
 import { toast } from "sonner";
-import { Plus, Send, Trash2, Phone, X, Loader2, UsersRound, AlertCircle } from "lucide-react";
+import {
+  Plus,
+  Send,
+  Trash2,
+  Phone,
+  X,
+  Loader2,
+  UsersRound,
+  AlertCircle,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/Skeleton";
 import { sendWhatsAppMessage } from "@/lib/whatsapp.functions";
@@ -27,9 +36,13 @@ interface Contact {
 }
 
 const phoneRegex = /^\+[1-9]\d{6,14}$/;
+
 const contactSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(200),
-  phone_number: z.string().trim().regex(phoneRegex, "Phone must be in E.164 format, e.g. +34911123456"),
+  phone_number: z
+    .string()
+    .trim()
+    .regex(phoneRegex, "Phone must be in E.164 format, e.g. +34911123456"),
 });
 
 async function fetchContacts(): Promise<Contact[]> {
@@ -43,7 +56,10 @@ async function fetchContacts(): Promise<Contact[]> {
 
 function ContactsPage() {
   const qc = useQueryClient();
-  const { data, isLoading, error } = useQuery({ queryKey: ["contacts"], queryFn: fetchContacts });
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["contacts"],
+    queryFn: fetchContacts,
+  });
   const [composeFor, setComposeFor] = useState<Contact | null>(null);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -136,9 +152,7 @@ function ContactsPage() {
       <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-border flex items-center justify-between">
           <h2 className="font-medium">All contacts</h2>
-          <span className="text-xs text-muted-foreground">
-            {data?.length ?? 0} total
-          </span>
+          <span className="text-xs text-muted-foreground">{data?.length ?? 0} total</span>
         </div>
         {isLoading ? (
           <div className="p-5 space-y-3">
@@ -153,7 +167,9 @@ function ContactsPage() {
             </div>
             <p className="text-sm font-medium text-destructive">Failed to load contacts</p>
             <p className="text-xs text-muted-foreground mt-2 mb-4">
-              {error instanceof Error ? error.message : "An error occurred while loading contacts."}
+              {error instanceof Error
+                ? error.message
+                : "An error occurred while loading contacts."}
             </p>
             <button
               onClick={() => qc.invalidateQueries({ queryKey: ["contacts"] })}
@@ -165,10 +181,7 @@ function ContactsPage() {
         ) : data && data.length > 0 ? (
           <ul className="divide-y divide-border">
             {data.map((c) => (
-              <li
-                key={c.id}
-                className="px-5 py-3 flex items-center justify-between gap-3"
-              >
+              <li key={c.id} className="px-5 py-3 flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <div className="font-medium truncate">{c.name}</div>
                   <div className="text-xs text-muted-foreground font-mono flex items-center gap-1.5">
@@ -216,7 +229,13 @@ function ContactsPage() {
   );
 }
 
-function ComposeSheet({ contact, onClose }: { contact: Contact; onClose: () => void }) {
+function ComposeSheet({
+  contact,
+  onClose,
+}: {
+  contact: Contact;
+  onClose: () => void;
+}) {
   const send = useServerFn(sendWhatsAppMessage);
   const qc = useQueryClient();
   const [body, setBody] = useState("");
