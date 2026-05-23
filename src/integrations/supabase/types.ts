@@ -6,101 +6,87 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
+// src/integrations/supabase/types.ts
+
+export type EstadoMensaje = 'pendiente' | 'enviado' | 'entregado' | 'leido' | 'error';
+export type TipoMiembro = 'propietario' | 'inquilino' | 'presidente' | 'administrador'; 
+
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.5"
-  }
+  __InternalSupabase: { PostgrestVersion: "14.5" }
   public: {
     Tables: {
-      contacts: {
+      clientes: {
         Row: {
-          created_at: string
-          id: string
-          name: string
-          phone_number: string
+          id: string; nombre: string; apellidos: string;
+          direccion: string | null; numero: string | null; piso: string | null;
+          puerta: string | null; codigo_postal: string | null;
+          municipio: string | null; provincia: string | null;
+          telefono_fijo: string | null; telefono_movil: string | null;
+          email: string | null; anotaciones: string | null;
+          created_at: string; updated_at: string;
         }
-        Insert: {
-          created_at?: string
-          id?: string
-          name: string
-          phone_number: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          name?: string
-          phone_number?: string
-        }
+        Insert: { nombre: string; apellidos: string; [key: string]: unknown }
+        Update: Partial<Database['public']['Tables']['clientes']['Row']>
         Relationships: []
       }
-      incoming_messages: {
+      comunidades: {
         Row: {
-          from_phone: string
-          id: string
-          message_body: string | null
-          received_at: string
-          wamid: string | null
+          id: string; nombre: string; direccion: string | null;
+          codigo_postal: string | null; municipio: string | null;
+          provincia: string | null; tiene_ascensor: boolean;
+          anotaciones: string | null; created_at: string; updated_at: string;
         }
-        Insert: {
-          from_phone: string
-          id?: string
-          message_body?: string | null
-          received_at?: string
-          wamid?: string | null
-        }
-        Update: {
-          from_phone?: string
-          id?: string
-          message_body?: string | null
-          received_at?: string
-          wamid?: string | null
-        }
+        Insert: { nombre: string; [key: string]: unknown }
+        Update: Partial<Database['public']['Tables']['comunidades']['Row']>
         Relationships: []
       }
-      messages: {
+      comunidad_clientes: {
         Row: {
-          contact_id: string | null
-          id: string
-          message_body: string
-          recipient_phone: string
-          sent_at: string
-          status: string
-          updated_at: string | null
-          wamid: string | null
+          id: string; comunidad_id: string; cliente_id: string;
+          tipo: string; es_pagador: boolean;
+          piso: string | null; puerta: string | null;
+          anotaciones: string | null; created_at: string; updated_at: string;
         }
-        Insert: {
-          contact_id?: string | null
-          id?: string
-          message_body: string
-          recipient_phone: string
-          sent_at?: string
-          status?: string
-          updated_at?: string | null
-          wamid?: string | null
-        }
-        Update: {
-          contact_id?: string | null
-          id?: string
-          message_body?: string
-          recipient_phone?: string
-          sent_at?: string
-          status?: string
-          updated_at?: string | null
-          wamid?: string | null
-        }
+        Insert: { comunidad_id: string; cliente_id: string; tipo: string; [key: string]: unknown }
+        Update: Partial<Database['public']['Tables']['comunidad_clientes']['Row']>
         Relationships: [
-          {
-            foreignKeyName: "messages_contact_id_fkey"
-            columns: ["contact_id"]
-            isOneToOne: false
-            referencedRelation: "contacts"
-            referencedColumns: ["id"]
-          },
+          { foreignKeyName: "comunidad_clientes_comunidad_id_fkey"; columns: ["comunidad_id"]; referencedRelation: "comunidades"; referencedColumns: ["id"] },
+          { foreignKeyName: "comunidad_clientes_cliente_id_fkey"; columns: ["cliente_id"]; referencedRelation: "clientes"; referencedColumns: ["id"] }
+        ]
+      }
+      mensajes_whatsapp: {
+        Row: {
+          id: string; cliente_id: string; nombre_cliente: string;
+          comunidad_id: string | null; telefono_destino: string;
+          mensaje: string; estado: EstadoMensaje;
+          whatsapp_message_id: string | null;
+          enviado_at: string | null; entregado_at: string | null;
+          leido_at: string | null; error_detalle: string | null;
+          created_at: string; updated_at: string;
+        }
+        Insert: { cliente_id: string; nombre_cliente: string; telefono_destino: string; mensaje: string; [key: string]: unknown }
+        Update: Partial<Database['public']['Tables']['mensajes_whatsapp']['Row']>
+        Relationships: [
+          { foreignKeyName: "mensajes_whatsapp_cliente_id_fkey"; columns: ["cliente_id"]; referencedRelation: "clientes"; referencedColumns: ["id"] },
+          { foreignKeyName: "mensajes_whatsapp_comunidad_id_fkey"; columns: ["comunidad_id"]; referencedRelation: "comunidades"; referencedColumns: ["id"] }
+        ]
+      }
+      polizas_seguros: {
+        Row: {
+          id: string; comunidad_id: string; aseguradora: string;
+          numero_poliza: string; tipo_cobertura: string | null;
+          fecha_inicio: string | null; fecha_vencimiento: string | null;
+          importe_anual: number | null; anotaciones: string | null;
+          created_at: string; updated_at: string;
+        }
+        Insert: { comunidad_id: string; aseguradora: string; numero_poliza: string; [key: string]: unknown }
+        Update: Partial<Database['public']['Tables']['polizas_seguros']['Row']>
+        Relationships: [
+          { foreignKeyName: "polizas_seguros_comunidad_id_fkey"; columns: ["comunidad_id"]; referencedRelation: "comunidades"; referencedColumns: ["id"] }
         ]
       }
     }
+
     Views: {
       [_ in never]: never
     }

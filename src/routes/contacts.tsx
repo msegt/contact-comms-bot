@@ -19,10 +19,13 @@ export const Route = createFileRoute("/contacts")({
   component: ContactsPage,
 });
 
-interface Contact {
+interface Cliente {
   id: string;
-  name: string;
-  phone_number: string;
+  nombre: string;
+  apellidos: string;
+  telefono_movil: string | null;
+  telefono_fijo: string | null;
+  email: string | null;
   created_at: string;
 }
 
@@ -35,10 +38,10 @@ const contactSchema = z.object({
     .regex(phoneRegex, "Phone must be E.164 format e.g. +447911123456"),
 });
 
-async function fetchContacts(): Promise<Contact[]> {
+async function fetchClientes(): Promise<Cliente[]> {
   const { data, error } = await supabase
-    .from("contacts")
-    .select("*")
+    .from("clientes")
+    .select("id, nombre, apellidos, telefono_movil, telefono_fijo, email, created_at")
     .order("created_at", { ascending: false });
   if (error) throw error;
   return data ?? [];

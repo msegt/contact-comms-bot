@@ -3,11 +3,22 @@ import { z } from "zod";
 import { createClient } from "@supabase/supabase-js";
 
 const sendSchema = z.object({
-  recipient_phone: z
-    .string()
-    .regex(/^\+[1-9]\d{6,14}$/, "Phone must be in E.164 format e.g. +447911123456"),
-  message_body: z.string().min(1).max(4096),
-  contact_id: z.string().uuid(),
+  telefono_destino: z.string().regex(/^\+[1-9]\d{6,14}$/),
+  mensaje: z.string().min(1).max(4096),
+  cliente_id: z.string().uuid(),
+  nombre_cliente: z.string(),
+  comunidad_id: z.string().uuid().optional(),
+});
+
+const { error: insertError } = await admin.from("mensajes_whatsapp").insert({
+  whatsapp_message_id: wamid,
+  cliente_id: data.cliente_id,
+  nombre_cliente: data.nombre_cliente,
+  comunidad_id: data.comunidad_id ?? null,
+  telefono_destino: data.telefono_destino,
+  mensaje: data.mensaje,
+  estado: "enviado",
+  enviado_at: new Date().toISOString(),
 });
 
 export const sendWhatsAppMessage = createServerFn({ method: "POST" })
