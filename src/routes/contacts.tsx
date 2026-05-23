@@ -199,7 +199,7 @@ function ContactsPage() {
                     onClick={() => {
                       if (confirm(`¿Eliminar a ${c.nombre} ${c.apellidos}?`)) deleteContact.mutate(c.id);
                     }}
-                    className="grid place-items-center h-8 w-8 rounded-md border border-border text-muted-foreground hover:bg-destructive hover:text-destructive-foreground hover:border-destructive"
+                    className="grid place-items-center h-8 w-8 rounded-md border border-border text-muted-foreground hover:bg-destructive hover:text-destructive-foreground hover:border-destructiv[...]
                     aria-label="Delete"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -240,7 +240,7 @@ function ComposeSheet({ contact, onClose }: { contact: Cliente; onClose: () => v
       if (!trimmed) throw new Error("Message cannot be empty");
       const res = await send({
         data: {
-          contact_id: contact.id,
+          cliente_id: contact.id,
           nombre_cliente: `${contact.nombre} ${contact.apellidos}`,
           telefono_destino: contact.telefono_movil!,
           mensaje: trimmed,
