@@ -111,10 +111,3 @@ function RootComponent() {
     </QueryClientProvider>
   );
 }
-
-function Layout() {
-  // re-export the shared layout, kept here to avoid SSR-only import cycles
-  return <LayoutInner />;
-}
-
-import { Layout as LayoutInner } from "@/components/Layout";
