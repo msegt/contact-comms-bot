@@ -10,17 +10,6 @@ const sendSchema = z.object({
   comunidad_id: z.string().uuid().optional(),
 });
 
-const { error: insertError } = await admin.from("mensajes_whatsapp").insert({
-  whatsapp_message_id: wamid,
-  cliente_id: data.cliente_id,
-  nombre_cliente: data.nombre_cliente,
-  comunidad_id: data.comunidad_id ?? null,
-  telefono_destino: data.telefono_destino,
-  mensaje: data.mensaje,
-  estado: "enviado",
-  enviado_at: new Date().toISOString(),
-});
-
 export const sendWhatsAppMessage = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => sendSchema.parse(input))
   .handler(async ({ data }) => {
