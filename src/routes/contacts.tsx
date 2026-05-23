@@ -31,17 +31,15 @@ interface Cliente {
 
 const phoneRegex = /^\+[1-9]\d{6,14}$/;
 const contactSchema = z.object({
-  name: z.string().trim().min(1, "Name required").max(100),
-  phone_number: z
-    .string()
-    .trim()
-    .regex(phoneRegex, "Phone must be E.164 format e.g. +447911123456"),
+  nombre: z.string().trim().min(1, "Nombre requerido").max(100),
+  apellidos: z.string().trim().min(1, "Apellidos requeridos").max(100),
+  telefono_movil: z.string().trim().regex(phoneRegex, "Teléfono en formato E.164, ej. +34911123456"),
 });
 
 async function fetchClientes(): Promise<Cliente[]> {
   const { data, error } = await supabase
     .from("clientes")
-    .select("id, nombre, apellidos, telefono_movil, telefono_fijo, email, created_at")
+    .select("id, nombre, apellidos, telefono_movil, created_at")
     .order("created_at", { ascending: false });
   if (error) throw error;
   return data ?? [];
@@ -49,19 +47,21 @@ async function fetchClientes(): Promise<Cliente[]> {
 
 function ContactsPage() {
   const qc = useQueryClient();
-  const { data, isLoading } = useQuery({ queryKey: ["contacts"], queryFn: fetchContacts });
-  const [composeFor, setComposeFor] = useState<Contact | null>(null);
-  const [name, setName] = useState("");
+  const { data, isLoading } = useQuery({ queryKey: ["contacts"], queryFn: fetchClientes });
+  const [composeFor, setComposeFor] = useState<Cliente | null>(null);
+  const [nombre, setNombre] = useState("");
+  const [apellidos, setApellidos] = useState("");
   const [phone, setPhone] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
 
   const addContact = useMutation({
-    mutationFn: async (input: { name: string; phone_number: string }) => {
-      const { error } = await supabase.from("contacts").insert(input);
+    mutationFn: async (input: { nombre: string; apellidos: string; telefono_movil: string }) => {
+    const { error } = await supabase.from("clientes").insert(input);
       if (error) throw error;
     },
     onSuccess: () => {
-      setName("");
+      setNombre("");
+      setApellidos("");  // ← añadir esta línea
       setPhone("");
       setFormError(null);
       qc.invalidateQueries({ queryKey: ["contacts"] });
@@ -73,7 +73,7 @@ function ContactsPage() {
 
   const deleteContact = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("contacts").delete().eq("id", id);
+      const { error } = await supabase.from("clientes").delete().eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -86,7 +86,7 @@ function ContactsPage() {
 
   function submitNew(e: React.FormEvent) {
     e.preventDefault();
-    const parsed = contactSchema.safeParse({ name, phone_number: phone });
+    const parsed = contactSchema.safeParse({ nombre, apellidos, telefono_movil: phone });
     if (!parsed.success) {
       setFormError(parsed.error.issues[0].message);
       return;
@@ -108,17 +108,23 @@ function ContactsPage() {
         className="rounded-xl border border-border bg-card p-5 shadow-sm"
       >
         <h2 className="font-medium mb-4">Add contact</h2>
-        <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1fr_auto] gap-3">
           <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Full name"
+            value={nombre}
+            onChange={(e) => setNombre(e.target.value)}
+            placeholder="Nombre"
             className="h-10 px-3 rounded-md border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring"
           />
           <input
-            value={phone}
+            value={apellidos}
+            onChange={(e) => setApellidos(e.target.value)}
+            placeholder="Apellidos"
+            className="h-10 px-3 rounded-md border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring"
+          />
+          <input
+            value={phone} 
             onChange={(e) => setPhone(e.target.value)}
-            placeholder="+447911123456"
+            placeholder="+347911123456"
             className="h-10 px-3 rounded-md border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring font-mono"
           />
           <button
@@ -160,10 +166,10 @@ function ContactsPage() {
                 className="px-5 py-3 flex items-center justify-between gap-3"
               >
                 <div className="min-w-0">
-                  <div className="font-medium truncate">{c.name}</div>
+                  <div className="font-medium truncate">{c.nombre} {c.apellidos}</div>
                   <div className="text-xs text-muted-foreground font-mono flex items-center gap-1.5">
                     <Phone className="h-3 w-3" />
-                    {c.phone_number}
+                    {c.telefono_movil ?? "-"}
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
@@ -175,7 +181,7 @@ function ContactsPage() {
                   </button>
                   <button
                     onClick={() => {
-                      if (confirm(`Delete ${c.name}?`)) deleteContact.mutate(c.id);
+                      if (confirm(`¿Eliminar a ${c.nombre} ${c.apellidos}?`)) deleteContact.mutate(c.id);
                     }}
                     className="grid place-items-center h-8 w-8 rounded-md border border-border text-muted-foreground hover:bg-destructive hover:text-destructive-foreground hover:border-destructive"
                     aria-label="Delete"
@@ -206,7 +212,7 @@ function ContactsPage() {
   );
 }
 
-function ComposeSheet({ contact, onClose }: { contact: Contact; onClose: () => void }) {
+function ComposeSheet({ contact, onClose }: { contact: Cliente; onClose: () => void }) {
   const send = useServerFn(sendWhatsAppMessage);
   const qc = useQueryClient();
   const [body, setBody] = useState("");
@@ -219,8 +225,9 @@ function ComposeSheet({ contact, onClose }: { contact: Contact; onClose: () => v
       const res = await send({
         data: {
           contact_id: contact.id,
-          recipient_phone: contact.phone_number,
-          message_body: trimmed,
+          nombre_cliente: `${contact.nombre} ${contact.apellidos}`,
+          telefono_destino: contact.telefono_movil!,
+          mensaje: trimmed,
         },
       });
       if (!res.ok) throw new Error(res.error);
@@ -259,9 +266,9 @@ function ComposeSheet({ contact, onClose }: { contact: Contact; onClose: () => v
         <div className="p-5 space-y-5 flex-1 overflow-y-auto">
           <div className="rounded-lg border border-border bg-muted/30 p-3">
             <div className="text-xs text-muted-foreground">To</div>
-            <div className="font-medium mt-0.5">{contact.name}</div>
+            <div className="font-medium mt-0.5">{contact.nombre} {contact.apellidos}</div>
             <div className="text-xs font-mono text-muted-foreground mt-0.5">
-              {contact.phone_number}
+              {contact.telefono_movil}
             </div>
           </div>
 
