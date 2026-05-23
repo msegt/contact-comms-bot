@@ -27,15 +27,16 @@ interface MessageRow {
   contacts: { name: string } | null;
 }
 
-async function fetchMessages(): Promise<MessageRow[]> {
+async function fetchMensajes() {
   const { data, error } = await supabase
-    .from("messages")
-    .select("id, wamid, recipient_phone, message_body, status, sent_at, updated_at, contacts(name)")
-    .order("sent_at", { ascending: false })
+    .from("mensajes_whatsapp")
+    .select("id, whatsapp_message_id, telefono_destino, mensaje, estado, enviado_at, updated_at, nombre_cliente, clientes(nombre, apellidos)")
+    .order("created_at", { ascending: false })
     .limit(200);
   if (error) throw error;
-  return (data ?? []) as unknown as MessageRow[];
+  return data ?? [];
 }
+
 
 function MessagesPage() {
   const qc = useQueryClient();
