@@ -1,7 +1,8 @@
-import { Link, Outlet, useRouterState } from "@tanstack/react-router";
-import { LayoutDashboard, Users, MessageSquare, Moon, Sun, MessageCircle } from "lucide-react";
+import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
+import { LayoutDashboard, Users, MessageSquare, Moon, Sun, MessageCircle, LogOut } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
 
 const nav = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -31,6 +32,12 @@ function useDarkMode() {
 export function Layout() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { dark, toggle } = useDarkMode();
+  const navigate = useNavigate();
+
+  async function handleSignOut() {
+    await supabase.auth.signOut();
+    navigate({ to: "/login" });
+  }
 
   return (
     <div className="flex min-h-screen w-full bg-background text-foreground">
@@ -80,13 +87,22 @@ export function Layout() {
           <div className="hidden md:block text-sm text-muted-foreground">
             WhatsApp Business Cloud API
           </div>
-          <button
-            onClick={toggle}
-            aria-label="Toggle theme"
-            className="grid place-items-center h-9 w-9 rounded-md border border-border hover:bg-accent transition-colors"
-          >
-            {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={toggle}
+              aria-label="Toggle theme"
+              className="grid place-items-center h-9 w-9 rounded-md border border-border hover:bg-accent transition-colors"
+            >
+              {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </button>
+            <button
+              onClick={handleSignOut}
+              aria-label="Sign out"
+              className="grid place-items-center h-9 w-9 rounded-md border border-border hover:bg-accent transition-colors"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
+          </div>
         </header>
 
         <main className="flex-1 px-4 md:px-8 py-6 pb-24 md:pb-10">

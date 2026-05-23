@@ -6,11 +6,13 @@ import {
   useRouter,
   HeadContent,
   Scripts,
+  redirect,
 } from "@tanstack/react-router";
 import { Toaster } from "sonner";
 
 import appCss from "../styles.css?url";
 import { Layout } from "@/components/Layout";
+import { supabase } from "@/integrations/supabase/client";
 
 function NotFoundComponent() {
   return (
@@ -69,6 +71,26 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
 }
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
+  beforeLoad: async ({ location }) => {
+    // Auth state lives in localStorage — skip the check during SSR.
+    if (typeof window === "undefined") return;
+
+    // Public paths that don't require authentication.
+    if (
+      location.pathname === "/login" ||
+      location.pathname.startsWith("/api/")
+    ) {
+      return;
+    }
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session) {
+      throw redirect({ to: "/login" });
+    }
+  },
   head: () => ({
     meta: [
       { charSet: "utf-8" },

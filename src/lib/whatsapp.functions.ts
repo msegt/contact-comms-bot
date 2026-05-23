@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { createClient } from "@supabase/supabase-js";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
 const sendSchema = z.object({
   recipient_phone: z
@@ -11,6 +12,7 @@ const sendSchema = z.object({
 });
 
 export const sendWhatsAppMessage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => sendSchema.parse(input))
   .handler(async ({ data }) => {
     const token = process.env.WHATSAPP_ACCESS_TOKEN;
@@ -60,14 +62,7 @@ export const sendWhatsAppMessage = createServerFn({ method: "POST" })
       return { ok: false as const, error: "Network error contacting WhatsApp API." };
     }
 
-    // Persist the message row using service role so RLS isn't an issue
-    const supabaseUrl = process.env.SUPABASE_URL!;
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-    const admin = createClient(supabaseUrl, serviceKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
-
-    const { error: insertError } = await admin.from("messages").insert({
+    const { error: insertError } = await supabaseAdmin.from("messages").insert({
       wamid,
       contact_id: data.contact_id,
       recipient_phone: data.recipient_phone,
