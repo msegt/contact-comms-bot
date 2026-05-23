@@ -12,6 +12,9 @@ import {
   Loader2,
   UsersRound,
   AlertCircle,
+  Mail,
+  Building2,
+  StickyNote,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/Skeleton";
@@ -32,6 +35,9 @@ interface Contact {
   id: string;
   name: string;
   phone_number: string;
+  email: string | null;
+  company: string | null;
+  notes: string | null;
   created_at: string;
 }
 
@@ -43,16 +49,27 @@ const contactSchema = z.object({
     .string()
     .trim()
     .regex(phoneRegex, "Phone must be in E.164 format, e.g. +34911123456"),
+  email: z
+    .string()
+    .trim()
+    .email("Enter a valid email address")
+    .max(254)
+    .optional()
+    .or(z.literal("")),
+  company: z.string().trim().max(200).optional().or(z.literal("")),
+  notes: z.string().trim().max(1000).optional().or(z.literal("")),
 });
 
 async function fetchContacts(): Promise<Contact[]> {
   const { data, error } = await supabase
     .from("contacts")
-    .select("id, name, phone_number, created_at")
+    .select("id, name, phone_number, email, company, notes, created_at")
     .order("created_at", { ascending: false });
   if (error) throw error;
   return data ?? [];
 }
+
+const EMPTY_FORM = { name: "", phone: "", email: "", company: "", notes: "" };
 
 function ContactsPage() {
   const qc = useQueryClient();
@@ -61,18 +78,29 @@ function ContactsPage() {
     queryFn: fetchContacts,
   });
   const [composeFor, setComposeFor] = useState<Contact | null>(null);
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
+  const [form, setForm] = useState(EMPTY_FORM);
   const [formError, setFormError] = useState<string | null>(null);
 
+  function setField(field: keyof typeof EMPTY_FORM) {
+    return (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      setForm((prev) => ({ ...prev, [field]: e.target.value }));
+      setFormError(null);
+    };
+  }
+
   const addContact = useMutation({
-    mutationFn: async (input: { name: string; phone_number: string }) => {
+    mutationFn: async (input: {
+      name: string;
+      phone_number: string;
+      email?: string | null;
+      company?: string | null;
+      notes?: string | null;
+    }) => {
       const { error } = await supabase.from("contacts").insert(input);
       if (error) throw error;
     },
     onSuccess: () => {
-      setName("");
-      setPhone("");
+      setForm(EMPTY_FORM);
       setFormError(null);
       qc.invalidateQueries({ queryKey: ["contacts"] });
       qc.invalidateQueries({ queryKey: ["stats"] });
@@ -96,12 +124,24 @@ function ContactsPage() {
 
   function submitNew(e: React.FormEvent) {
     e.preventDefault();
-    const parsed = contactSchema.safeParse({ name, phone_number: phone });
+    const parsed = contactSchema.safeParse({
+      name: form.name,
+      phone_number: form.phone,
+      email: form.email || undefined,
+      company: form.company || undefined,
+      notes: form.notes || undefined,
+    });
     if (!parsed.success) {
       setFormError(parsed.error.issues[0].message);
       return;
     }
-    addContact.mutate(parsed.data);
+    addContact.mutate({
+      name: parsed.data.name,
+      phone_number: parsed.data.phone_number,
+      email: parsed.data.email || null,
+      company: parsed.data.company || null,
+      notes: parsed.data.notes || null,
+    });
   }
 
   return (
@@ -118,35 +158,99 @@ function ContactsPage() {
         className="rounded-xl border border-border bg-card p-5 shadow-sm"
       >
         <h2 className="font-medium mb-4">Add contact</h2>
-        <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-3">
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Full name"
-            className="h-10 px-3 rounded-md border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring"
-          />
-          <input
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="+34911123456"
-            className="h-10 px-3 rounded-md border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring font-mono"
-          />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {/* Required fields */}
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              Full name <span className="text-destructive">*</span>
+            </label>
+            <input
+              value={form.name}
+              onChange={setField("name")}
+              placeholder="Jane Smith"
+              className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              WhatsApp number <span className="text-destructive">*</span>
+            </label>
+            <input
+              value={form.phone}
+              onChange={setField("phone")}
+              placeholder="+34911123456"
+              className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring font-mono"
+            />
+          </div>
+
+          {/* Optional fields */}
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              Email
+            </label>
+            <div className="relative">
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+              <input
+                value={form.email}
+                onChange={setField("email")}
+                type="email"
+                placeholder="jane@example.com"
+                className="w-full h-10 pl-9 pr-3 rounded-md border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              Company
+            </label>
+            <div className="relative">
+              <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+              <input
+                value={form.company}
+                onChange={setField("company")}
+                placeholder="Acme Ltd"
+                className="w-full h-10 pl-9 pr-3 rounded-md border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+          </div>
+
+          {/* Notes — full width */}
+          <div className="space-y-1 md:col-span-2">
+            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              Notes
+            </label>
+            <div className="relative">
+              <StickyNote className="absolute left-3 top-3 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+              <textarea
+                value={form.notes}
+                onChange={setField("notes")}
+                placeholder="Any relevant notes about this contact…"
+                rows={2}
+                maxLength={1000}
+                className="w-full pl-9 pr-3 py-2.5 rounded-md border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring resize-none"
+              />
+            </div>
+          </div>
+        </div>
+
+        {formError && (
+          <p className="mt-2 text-xs text-destructive">{formError}</p>
+        )}
+
+        <div className="mt-4 flex justify-end">
           <button
             type="submit"
             disabled={addContact.isPending}
-            className="h-10 inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+            className="h-10 inline-flex items-center justify-center gap-2 rounded-md bg-primary px-5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
           >
             {addContact.isPending ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <Plus className="h-4 w-4" />
             )}
-            Add
+            Add contact
           </button>
         </div>
-        {formError && (
-          <p className="mt-2 text-xs text-destructive">{formError}</p>
-        )}
       </form>
 
       <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
@@ -184,10 +288,29 @@ function ContactsPage() {
               <li key={c.id} className="px-5 py-3 flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <div className="font-medium truncate">{c.name}</div>
-                  <div className="text-xs text-muted-foreground font-mono flex items-center gap-1.5">
-                    <Phone className="h-3 w-3" />
-                    {c.phone_number ?? "-"}
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5">
+                    <span className="text-xs text-muted-foreground font-mono flex items-center gap-1">
+                      <Phone className="h-3 w-3" />
+                      {c.phone_number}
+                    </span>
+                    {c.email && (
+                      <span className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Mail className="h-3 w-3" />
+                        {c.email}
+                      </span>
+                    )}
+                    {c.company && (
+                      <span className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Building2 className="h-3 w-3" />
+                        {c.company}
+                      </span>
+                    )}
                   </div>
+                  {c.notes && (
+                    <p className="text-xs text-muted-foreground mt-1 italic truncate max-w-sm">
+                      {c.notes}
+                    </p>
+                  )}
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <button
@@ -292,6 +415,9 @@ function ComposeSheet({
             <div className="text-xs font-mono text-muted-foreground mt-0.5">
               {contact.phone_number}
             </div>
+            {contact.company && (
+              <div className="text-xs text-muted-foreground mt-0.5">{contact.company}</div>
+            )}
           </div>
 
           <div>
