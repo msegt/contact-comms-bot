@@ -9,8 +9,8 @@ import { MessageSquareDashed } from "lucide-react";
 export const Route = createFileRoute("/messages")({
   head: () => ({
     meta: [
-      { title: "Messages — WhatsBoard" },
-      { name: "description", content: "Live log of sent WhatsApp messages and their delivery status." },
+      { title: "Mensajes — WhatsBoard" },
+      { name: "description", content: "Registro en tiempo real de los mensajes WhatsApp enviados y su estado de entrega." },
     ],
   }),
   component: MessagesPage,
@@ -18,20 +18,21 @@ export const Route = createFileRoute("/messages")({
 
 interface MessageRow {
   id: string;
-  wamid: string | null;
-  recipient_phone: string;
-  message_body: string;
-  status: string;
-  sent_at: string | null;
+  whatsapp_message_id: string | null;
+  telefono_destino: string;
+  mensaje: string;
+  estado: string;
+  enviado_at: string | null;
   updated_at: string;
-  contacts: { name: string } | null;
+  nombre_cliente: string;
+  clientes: { nombre: string; apellidos: string } | null;
 }
 
-async function fetchMessages(): Promise<MessageRow[]> {
+async function fetchMensajes(): Promise<MessageRow[]> {
   const { data, error } = await supabase
-    .from("messages")
-    .select("id, wamid, recipient_phone, message_body, status, sent_at, updated_at, contacts(name)")
-    .order("sent_at", { ascending: false })
+    .from("mensajes_whatsapp")
+    .select("id, whatsapp_message_id, telefono_destino, mensaje, estado, enviado_at, updated_at, nombre_cliente, clientes(nombre, apellidos)")
+    .order("enviado_at", { ascending: false })
     .limit(200);
   if (error) throw error;
   return (data ?? []) as unknown as MessageRow[];
@@ -41,7 +42,7 @@ function MessagesPage() {
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ["messages-log"],
-    queryFn: fetchMessages,
+    queryFn: fetchMensajes,
   });
 
   useEffect(() => {
@@ -49,7 +50,7 @@ function MessagesPage() {
       .channel("messages-log-realtime")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "messages" },
+        { event: "*", schema: "public", table: "mensajes_whatsapp" },
         () => { qc.invalidateQueries({ queryKey: ["messages-log"] }); },
       )
       .subscribe();
@@ -59,9 +60,9 @@ function MessagesPage() {
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Messages</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Mensajes</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Live log — status updates arrive automatically from Meta.
+          Registro en tiempo real — los cambios de estado llegan automáticamente desde Meta.
         </p>
       </div>
 
@@ -75,10 +76,10 @@ function MessagesPage() {
             <table className="w-full text-sm">
               <thead className="bg-muted/40 text-muted-foreground text-xs uppercase tracking-wider">
                 <tr>
-                  <th className="text-left px-5 py-3 font-medium">Recipient</th>
-                  <th className="text-left px-5 py-3 font-medium">Message</th>
-                  <th className="text-left px-5 py-3 font-medium">Status</th>
-                  <th className="text-left px-5 py-3 font-medium whitespace-nowrap">Sent</th>
+                  <th className="text-left px-5 py-3 font-medium">Destinatario</th>
+                  <th className="text-left px-5 py-3 font-medium">Mensaje</th>
+                  <th className="text-left px-5 py-3 font-medium">Estado</th>
+                  <th className="text-left px-5 py-3 font-medium whitespace-nowrap">Enviado</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -86,16 +87,18 @@ function MessagesPage() {
                   <tr key={m.id} className="hover:bg-muted/20">
                     <td className="px-5 py-3 align-top">
                       <div className="font-medium">
-                        {m.contacts?.name ?? "—"}
+                        {m.clientes
+                          ? `${m.clientes.nombre} ${m.clientes.apellidos}`
+                          : m.nombre_cliente}
                       </div>
-                      <div className="text-xs font-mono text-muted-foreground">{m.recipient_phone}</div>
+                      <div className="text-xs font-mono text-muted-foreground">{m.telefono_destino}</div>
                     </td>
                     <td className="px-5 py-3 align-top max-w-md">
-                      <p className="line-clamp-2 text-muted-foreground">{m.message_body}</p>
+                      <p className="line-clamp-2 text-muted-foreground">{m.mensaje}</p>
                     </td>
-                    <td className="px-5 py-3 align-top"><StatusBadge status={m.status} /></td>
+                    <td className="px-5 py-3 align-top"><StatusBadge status={m.estado} /></td>
                     <td className="px-5 py-3 align-top text-muted-foreground whitespace-nowrap text-xs">
-                      {m.sent_at ? new Date(m.sent_at).toLocaleString() : "—"}
+                      {m.enviado_at ? new Date(m.enviado_at).toLocaleString() : "—"}
                     </td>
                   </tr>
                 ))}
@@ -107,8 +110,8 @@ function MessagesPage() {
             <div className="mx-auto grid place-items-center h-12 w-12 rounded-full bg-muted text-muted-foreground mb-3">
               <MessageSquareDashed className="h-6 w-6" />
             </div>
-            <p className="text-sm font-medium">No messages sent yet</p>
-            <p className="text-xs text-muted-foreground mt-1">Send your first message from the Contacts page.</p>
+            <p className="text-sm font-medium">Sin mensajes enviados todavía</p>
+            <p className="text-xs text-muted-foreground mt-1">Envía tu primer mensaje desde la página de Contactos.</p>
           </div>
         )}
       </div>

@@ -62,24 +62,29 @@ export const Route = createFileRoute("/api/public/whatsapp-webhook")({
               const value = change.value;
               if (!value) continue;
 
-              // Status updates from Meta (sent → delivered → read)
+              // Status updates: sent → delivered → read
               for (const status of value.statuses ?? []) {
                 const updateData: Record<string, string> = {
-                  status: status.status,
+                  estado: status.status,
                   updated_at: new Date().toISOString(),
                 };
+                if (status.status === "delivered") {
+                  updateData.entregado_at = new Date().toISOString();
+                } else if (status.status === "read") {
+                  updateData.leido_at = new Date().toISOString();
+                }
 
                 const { error } = await admin
-                  .from("messages")
+                  .from("mensajes_whatsapp")
                   .update(updateData)
-                  .eq("wamid", status.id);
+                  .eq("whatsapp_message_id", status.id);
                 if (error) console.error("status update error", error);
               }
 
               // Incoming messages from contacts
               for (const msg of value.messages ?? []) {
-                const { error } = await admin.from("incoming_messages").insert({
-                  wamid: msg.id,
+                const { error } = await admin.from("mensajes_entrantes").insert({
+                  whatsapp_message_id: msg.id,
                   from_phone: `+${msg.from}`,
                   message_body: msg.text?.body ?? null,
                 });

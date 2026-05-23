@@ -44,47 +44,42 @@ export const sendWhatsAppMessage = createServerFn({ method: "POST" })
 
       const json = (await res.json()) as {
         messages?: Array<{ id: string }>;
-        error?: { message?: string };
+        error?: { message?: string; error_data?: { details?: string } };
       };
 
       if (!res.ok) {
-        const msg = json?.error?.message ?? `Meta API returned ${res.status}`;
+        const msg = json.error?.error_data?.details ?? json.error?.message ?? "Error desconocido de WhatsApp";
         return { ok: false as const, error: msg };
       }
 
       wamid = json.messages?.[0]?.id ?? null;
     } catch (err) {
-      console.error("WhatsApp send error:", err);
-      return { ok: false as const, error: "Error de red al contactar la API de WhatsApp." };
+      return { ok: false as const, error: err instanceof Error ? err.message : "Error de red" };
     }
 
-    // Persist using service role so RLS is not an issue
-    const supabaseUrl = process.env.SUPABASE_URL!;
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !serviceKey) {
+      // Message was sent successfully — just can't log it
+      console.error("Missing Supabase credentials; message sent but not logged");
+      return { ok: true as const };
+    }
+
     const admin = createClient(supabaseUrl, serviceKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    const { error: insertError } = await admin
-      .from("mensajes_whatsapp")
-      .insert({
-        whatsapp_message_id: wamid,
-        cliente_id: data.cliente_id,
-        nombre_cliente: data.nombre_cliente,
-        telefono_destino: data.recipient_phone,
-        mensaje: data.message_body,
-        estado: "enviado",
-        enviado_at: new Date().toISOString(),
-      });
+    const { error: dbError } = await admin.from("mensajes_whatsapp").insert({
+      cliente_id: data.cliente_id,
+      nombre_cliente: data.nombre_cliente,
+      telefono_destino: data.recipient_phone,
+      mensaje: data.message_body,
+      estado: "enviado",
+      whatsapp_message_id: wamid,
+      enviado_at: new Date().toISOString(),
+    });
 
-    if (insertError) {
-      console.error("Failed to log message:", insertError);
-      return {
-        ok: true as const,
-        wamid,
-        warning: "Mensaje enviado pero no se pudo registrar en la base de datos.",
-      };
-    }
+    if (dbError) console.error("DB insert error", dbError);
 
-    return { ok: true as const, wamid };
+    return { ok: true as const };
   });
