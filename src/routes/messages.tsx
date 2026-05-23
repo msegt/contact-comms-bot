@@ -42,7 +42,7 @@ function MessagesPage() {
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ["messages-log"],
-    queryFn: fetchMessages,
+    queryFn: fetchMensajes,
   });
 
   useEffect(() => {
