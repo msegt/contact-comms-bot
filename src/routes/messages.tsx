@@ -26,7 +26,6 @@ interface MessageRow {
   mensaje: string;
   estado: string;
   enviado_at: string | null;
-  updated_at: string | null;
   nombre_cliente: string | null;
 }
 
@@ -34,7 +33,7 @@ async function fetchMensajes() {
   const { data, error } = await supabase
     .from("mensajes_whatsapp")
     .select(
-      "id, whatsapp_message_id, telefono_destino, mensaje, estado, enviado_at, updated_at, nombre_cliente",
+      "id, whatsapp_message_id, telefono_destino, mensaje, estado, enviado_at, nombre_cliente",
     )
     .order("created_at", { ascending: false })
     .limit(200);

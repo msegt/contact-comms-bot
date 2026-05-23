@@ -65,6 +65,7 @@ async function fetchRecent(): Promise<RecentMessage[]> {
   const { data } = await supabase
     .from("mensajes_whatsapp")
     .select("id, telefono_destino, mensaje, estado, enviado_at, nombre_cliente")
+    .not("enviado_at", "is", null)
     .order("enviado_at", { ascending: false })
     .limit(10);
   return (data ?? []) as RecentMessage[];
