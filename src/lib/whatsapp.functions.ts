@@ -3,11 +3,9 @@ import { z } from "zod";
 import { createClient } from "@supabase/supabase-js";
 
 const sendSchema = z.object({
-  telefono_destino: z.string().regex(/^\+[1-9]\d{6,14}$/),
-  mensaje: z.string().min(1).max(4096),
-  cliente_id: z.string().uuid(),
-  nombre_cliente: z.string(),
-  comunidad_id: z.string().uuid().optional(),
+  recipient_phone: z.string().regex(/^\+[1-9]\d{6,14}$/),
+  message_body: z.string().min(1).max(4096),
+  contact_id: z.string().uuid(),
 });
 
 export const sendWhatsAppMessage = createServerFn({ method: "POST" })
@@ -21,9 +19,9 @@ export const sendWhatsAppMessage = createServerFn({ method: "POST" })
     }
 
     // Send via Meta Graph API
-    const to = data.telefono_destino.startsWith("+")
-      ? data.telefono_destino.slice(1)
-      : data.telefono_destino;
+    const to = data.recipient_phone.startsWith("+")
+      ? data.recipient_phone.slice(1)
+      : data.recipient_phone;
 
     let wamid: string | null = null;
     try {
@@ -39,7 +37,7 @@ export const sendWhatsAppMessage = createServerFn({ method: "POST" })
             messaging_product: "whatsapp",
             to,
             type: "text",
-            text: { body: data.mensaje },
+            text: { body: data.message_body },
           }),
         },
       );
@@ -67,15 +65,13 @@ export const sendWhatsAppMessage = createServerFn({ method: "POST" })
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    const { error: insertError } = await admin.from("mensajes_whatsapp").insert({
-      whatsapp_message_id: wamid,
-      cliente_id: data.cliente_id,
-      nombre_cliente: data.nombre_cliente,
-      comunidad_id: data.comunidad_id ?? null,
-      telefono_destino: data.telefono_destino,
-      mensaje: data.mensaje,
-      estado: "enviado",
-      enviado_at: new Date().toISOString(),
+    const { error: insertError } = await admin.from("messages").insert({
+      wamid,
+      contact_id: data.contact_id,
+      recipient_phone: data.recipient_phone,
+      message_body: data.message_body,
+      status: "sent",
+      sent_at: new Date().toISOString(),
     });
 
     if (insertError) {
