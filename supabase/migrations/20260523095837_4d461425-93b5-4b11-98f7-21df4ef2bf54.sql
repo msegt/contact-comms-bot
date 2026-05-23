@@ -1,49 +1,38 @@
-CREATE SCHEMA IF NOT EXISTS "CAFmensajes";
+-- NOTE: These tables already exist in the live database (public schema).
+-- This file documents the schema for reference only.
+-- Do NOT run this migration against the live database.
 
-CREATE TABLE "CAFmensajes".contacts (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  name text NOT NULL,
-  phone_number text NOT NULL,
-  created_at timestamptz NOT NULL DEFAULT now()
-);
+-- CREATE TABLE public.clientes (
+--   id uuid NOT NULL DEFAULT gen_random_uuid(),
+--   nombre text NOT NULL,
+--   apellidos text NOT NULL,
+--   direccion text, numero text, piso text, puerta text,
+--   codigo_postal character, municipio text, provincia text,
+--   telefono_fijo text, telefono_movil text, email text, anotaciones text,
+--   created_at timestamptz NOT NULL DEFAULT now(),
+--   updated_at timestamptz NOT NULL DEFAULT now(),
+--   CONSTRAINT clientes_pkey PRIMARY KEY (id)
+-- );
 
-CREATE TABLE "CAFmensajes".messages (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  wamid text UNIQUE,
-  contact_id uuid REFERENCES "CAFmensajes".contacts(id) ON DELETE SET NULL,
-  recipient_phone text NOT NULL,
-  message_body text NOT NULL,
-  status text NOT NULL DEFAULT 'pending',
-  sent_at timestamptz NOT NULL DEFAULT now(),
-  updated_at timestamptz
-);
+-- CREATE TABLE public.mensajes_whatsapp (
+--   id uuid NOT NULL DEFAULT gen_random_uuid(),
+--   cliente_id uuid NOT NULL REFERENCES public.clientes(id),
+--   nombre_cliente text NOT NULL,
+--   comunidad_id uuid REFERENCES public.comunidades(id),
+--   telefono_destino text NOT NULL,
+--   mensaje text NOT NULL,
+--   estado estado_mensaje NOT NULL DEFAULT 'pendiente',
+--   whatsapp_message_id text,
+--   enviado_at timestamptz, entregado_at timestamptz, leido_at timestamptz,
+--   error_detalle text,
+--   created_at timestamptz NOT NULL DEFAULT now(),
+--   updated_at timestamptz NOT NULL DEFAULT now(),
+--   CONSTRAINT mensajes_whatsapp_pkey PRIMARY KEY (id)
+-- );
 
-CREATE INDEX idx_messages_wamid ON "CAFmensajes".messages(wamid);
-CREATE INDEX idx_messages_sent_at ON "CAFmensajes".messages(sent_at DESC);
-
-CREATE TABLE "CAFmensajes".incoming_messages (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  wamid text,
-  from_phone text NOT NULL,
-  message_body text,
-  received_at timestamptz NOT NULL DEFAULT now()
-);
-
-ALTER TABLE "CAFmensajes".contacts ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "CAFmensajes".messages ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "CAFmensajes".incoming_messages ENABLE ROW LEVEL SECURITY;
-
--- Demo policies: open access (no auth in this build)
-CREATE POLICY "Anyone can read contacts" ON "CAFmensajes".contacts FOR SELECT USING (true);
-CREATE POLICY "Anyone can insert contacts" ON "CAFmensajes".contacts FOR INSERT WITH CHECK (true);
-CREATE POLICY "Anyone can update contacts" ON "CAFmensajes".contacts FOR UPDATE USING (true);
-CREATE POLICY "Anyone can delete contacts" ON "CAFmensajes".contacts FOR DELETE USING (true);
-
-CREATE POLICY "Anyone can read messages" ON "CAFmensajes".messages FOR SELECT USING (true);
-CREATE POLICY "Anyone can insert messages" ON "CAFmensajes".messages FOR INSERT WITH CHECK (true);
-CREATE POLICY "Anyone can update messages" ON "CAFmensajes".messages FOR UPDATE USING (true);
-
-CREATE POLICY "Anyone can read incoming_messages" ON "CAFmensajes".incoming_messages FOR SELECT USING (true);
-
-ALTER PUBLICATION supabase_realtime ADD TABLE "CAFmensajes".messages;
-ALTER TABLE "CAFmensajes".messages REPLICA IDENTITY FULL;
+-- CREATE TABLE public.mensajes_entrantes (
+--   id uuid NOT NULL DEFAULT gen_random_uuid(),
+--   whatsapp_message_id text, from_phone text NOT NULL,
+--   message_body text, received_at timestamptz NOT NULL DEFAULT now(),
+--   CONSTRAINT mensajes_entrantes_pkey PRIMARY KEY (id)
+-- );

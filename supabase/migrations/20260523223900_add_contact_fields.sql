@@ -1,4 +1,3 @@
-ALTER TABLE "CAFmensajes".contacts
-  ADD COLUMN IF NOT EXISTS email text,
-  ADD COLUMN IF NOT EXISTS company text,
-  ADD COLUMN IF NOT EXISTS notes text;
+-- This migration is no longer needed.
+-- All relevant fields (email, anotaciones, direccion, etc.) already exist
+-- in the public.clientes table in the live database.

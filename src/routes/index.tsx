@@ -28,7 +28,7 @@ interface RecentMessage {
   telefono_destino: string;
   mensaje: string;
   estado: string;
-  enviado_at: string;
+  enviado_at: string | null;
   clientes: { nombre: string; apellidos: string } | null;
 }
 
@@ -86,16 +86,14 @@ function DashboardPage() {
         },
       )
       .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, [stats, recent]);
 
   const kpis = [
-    { label: "Total Contacts", value: stats.data?.totalContacts, icon: Users },
-    { label: "Sent Today", value: stats.data?.sentToday, icon: Send },
-    { label: "Delivered", value: stats.data?.delivered, icon: CheckCheck },
-    { label: "Read", value: stats.data?.read, icon: Eye },
+    { label: "Total Contactos", value: stats.data?.totalContacts, icon: Users },
+    { label: "Enviados hoy", value: stats.data?.sentToday, icon: Send },
+    { label: "Entregados", value: stats.data?.delivered, icon: CheckCheck },
+    { label: "Leídos", value: stats.data?.read, icon: Eye },
   ];
 
   return (
@@ -103,7 +101,7 @@ function DashboardPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Live overview of your WhatsApp Business activity.
+          Resumen en tiempo real de tu actividad en WhatsApp Business.
         </p>
       </div>
 
@@ -111,10 +109,7 @@ function DashboardPage() {
         {kpis.map((k) => {
           const Icon = k.icon;
           return (
-            <div
-              key={k.label}
-              className="rounded-xl border border-border bg-card p-5 shadow-sm"
-            >
+            <div key={k.label} className="rounded-xl border border-border bg-card p-5 shadow-sm">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">{k.label}</span>
                 <Icon className="h-4 w-4 text-primary" />
@@ -129,7 +124,7 @@ function DashboardPage() {
 
       <section className="rounded-xl border border-border bg-card shadow-sm">
         <div className="px-5 py-4 border-b border-border">
-          <h2 className="font-medium">Recent messages</h2>
+          <h2 className="font-medium">Mensajes recientes</h2>
         </div>
         <div className="divide-y divide-border">
           {recent.isLoading ? (
@@ -147,28 +142,21 @@ function DashboardPage() {
                     <span className="font-medium truncate">
                       {m.clientes ? `${m.clientes.nombre} ${m.clientes.apellidos}` : m.telefono_destino}
                     </span>
-                    <span className="text-xs text-muted-foreground">
-                      {m.telefono_destino}
-                    </span>
+                    <span className="text-xs text-muted-foreground">{m.telefono_destino}</span>
                   </div>
-                  <p className="mt-1 text-sm text-muted-foreground truncate">
-                    {m.mensaje}
-                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground truncate">{m.mensaje}</p>
                 </div>
                 <div className="flex flex-col items-end gap-1 shrink-0">
                   <StatusBadge status={m.estado} />
                   <span className="text-xs text-muted-foreground">
-                    {new Date(m.enviado_at).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
+                    {m.enviado_at ? new Date(m.enviado_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}
                   </span>
                 </div>
               </div>
             ))
           ) : (
             <div className="p-10 text-center text-sm text-muted-foreground">
-              No messages yet. Head to Contacts to send your first message.
+              Sin mensajes todavía. Ve a Contactos para enviar tu primer mensaje.
             </div>
           )}
         </div>
