@@ -21,7 +21,7 @@ import { useServerFn } from "@tanstack/react-start";
 export const Route = createFileRoute("/contacts")({
   head: () => ({
     meta: [
-      { title: "Contacts — WhatsBoard" },
+      { title: "Contacts - WhatsBoard" },
       { name: "description", content: "Manage WhatsApp contacts and send messages." },
     ],
   }),
@@ -304,7 +304,7 @@ function ComposeSheet({
               }}
               rows={8}
               maxLength={4096}
-              placeholder="Type your message…"
+              placeholder="Type your message..."
               className="mt-2 w-full rounded-md border border-input bg-background p-3 text-sm outline-none focus:ring-2 focus:ring-ring resize-none"
             />
             <div className="mt-1 flex justify-between text-xs text-muted-foreground">
@@ -328,7 +328,7 @@ function ComposeSheet({
           >
             {mutation.isPending ? (
               <>
-                <Loader2 className="h-4 w-4 animate-spin" /> Sending…
+                <Loader2 className="h-4 w-4 animate-spin" /> Sending...
               </>
             ) : (
               <>
