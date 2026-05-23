@@ -25,11 +25,11 @@ interface Stats {
 
 interface RecentMessage {
   id: string;
-  recipient_phone: string;
-  message_body: string;
-  status: string;
-  sent_at: string;
-  contacts: { name: string } | null;
+  telefono_destino: string;
+  mensaje: string;
+  estado: string;
+  enviado_at: string;
+  clientes: { nombre: string; apellidos: string } | null;
 }
 
 async function fetchStats(): Promise<Stats> {
@@ -38,19 +38,19 @@ async function fetchStats(): Promise<Stats> {
   const iso = startOfDay.toISOString();
 
   const [contacts, sentToday, delivered, read] = await Promise.all([
-    supabase.from("contacts").select("*", { count: "exact", head: true }),
+    supabase.from("clientes").select("*", { count: "exact", head: true }),
     supabase
-      .from("messages")
+      .from("mensajes_whatsapp")
       .select("*", { count: "exact", head: true })
-      .gte("sent_at", iso),
+      .gte("enviado_at", iso),
     supabase
-      .from("messages")
+      .from("mensajes_whatsapp")
       .select("*", { count: "exact", head: true })
-      .eq("status", "delivered"),
+      .eq("estado", "entregado"),
     supabase
-      .from("messages")
+      .from("mensajes_whatsapp")
       .select("*", { count: "exact", head: true })
-      .eq("status", "read"),
+      .eq("estado", "leido"),
   ]);
 
   return {
@@ -63,9 +63,9 @@ async function fetchStats(): Promise<Stats> {
 
 async function fetchRecent(): Promise<RecentMessage[]> {
   const { data } = await supabase
-    .from("messages")
-    .select("id, recipient_phone, message_body, status, sent_at, contacts(name)")
-    .order("sent_at", { ascending: false })
+    .from("mensajes_whatsapp")
+    .select("id, telefono_destino, mensaje, estado, enviado_at, clientes(nombre, apellidos)")
+    .order("enviado_at", { ascending: false })
     .limit(10);
   return (data ?? []) as unknown as RecentMessage[];
 }
@@ -79,7 +79,7 @@ function DashboardPage() {
       .channel("dashboard-messages")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "messages" },
+        { event: "*", schema: "public", table: "mensajes_whatsapp" },
         () => {
           stats.refetch();
           recent.refetch();
@@ -145,20 +145,20 @@ function DashboardPage() {
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-medium truncate">
-                      {m.contacts?.name ?? m.recipient_phone}
+                      {m.clientes ? `${m.clientes.nombre} ${m.clientes.apellidos}` : m.telefono_destino}
                     </span>
                     <span className="text-xs text-muted-foreground">
-                      {m.recipient_phone}
+                      {m.telefono_destino}
                     </span>
                   </div>
                   <p className="mt-1 text-sm text-muted-foreground truncate">
-                    {m.message_body}
+                    {m.mensaje}
                   </p>
                 </div>
                 <div className="flex flex-col items-end gap-1 shrink-0">
-                  <StatusBadge status={m.status} />
+                  <StatusBadge status={m.estado} />
                   <span className="text-xs text-muted-foreground">
-                    {new Date(m.sent_at).toLocaleTimeString([], {
+                    {new Date(m.enviado_at).toLocaleTimeString([], {
                       hour: "2-digit",
                       minute: "2-digit",
                     })}
