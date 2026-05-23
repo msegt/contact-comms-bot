@@ -22,6 +22,14 @@ interface MetaPayload {
   entry?: Array<{ changes?: MetaChange[] }>;
 }
 
+// Meta sends English status strings; map them to the Spanish enum values in the DB
+const STATUS_MAP: Record<string, string> = {
+  sent:      "enviado",
+  delivered: "entregado",
+  read:      "leido",
+  failed:    "fallido",
+};
+
 export const Route = createFileRoute("/api/public/whatsapp-webhook")({
   server: {
     handlers: {
@@ -62,15 +70,20 @@ export const Route = createFileRoute("/api/public/whatsapp-webhook")({
               const value = change.value;
               if (!value) continue;
 
-              // Status updates: sent → delivered → read
               for (const status of value.statuses ?? []) {
+                const estadoDB = STATUS_MAP[status.status];
+                if (!estadoDB) {
+                  console.warn("Unknown Meta status:", status.status);
+                  continue;
+                }
+
                 const updateData: Record<string, string> = {
-                  estado: status.status,
+                  estado: estadoDB,
                   updated_at: new Date().toISOString(),
                 };
-                if (status.status === "delivered") {
+                if (estadoDB === "entregado") {
                   updateData.entregado_at = new Date().toISOString();
-                } else if (status.status === "read") {
+                } else if (estadoDB === "leido") {
                   updateData.leido_at = new Date().toISOString();
                 }
 
@@ -81,7 +94,6 @@ export const Route = createFileRoute("/api/public/whatsapp-webhook")({
                 if (error) console.error("status update error", error);
               }
 
-              // Incoming messages from contacts
               for (const msg of value.messages ?? []) {
                 const { error } = await admin.from("mensajes_entrantes").insert({
                   whatsapp_message_id: msg.id,
