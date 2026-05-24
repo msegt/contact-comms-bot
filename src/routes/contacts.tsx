@@ -59,6 +59,7 @@ interface Cliente {
   BajoNIF: string | null;
   BajoFdenominacion: string | null;
   Notas: string | null;
+  NumComunidad: number | null;
   created_at: string;
 }
 
@@ -104,6 +105,7 @@ const clienteSchema = z.object({
   Notas: z.string().trim().max(4000).optional().or(z.literal("")),
   Codigo: z.string().trim().max(50).optional().or(z.literal("")),
   id_persona: z.string().trim().max(50).optional().or(z.literal("")),
+  NumComunidad: z.string().trim().optional().or(z.literal("")),
 });
 
 const EMPTY_FORM = {
@@ -112,13 +114,13 @@ const EMPTY_FORM = {
   Direccion: "", Cpostal: "", Cuenta: "", pagadores: "",
   NEMP: "", fecha_baja: "", coddistri: "", Nomdistri: "",
   bloque: "", BajoNombre: "", BajoNIF: "", BajoFdenominacion: "",
-  Notas: "", Codigo: "", id_persona: "",
+  Notas: "", Codigo: "", id_persona: "", NumComunidad: "",
 };
 
 async function fetchClientes(): Promise<Cliente[]> {
   const { data, error } = await supabase
     .from("clientes")
-    .select("id, Codigo, id_persona, Nombre, NIF, Fdenominacion, Coeficiente, Movil, TelefonoFijo, Email, Web, Fax, Direccion, Cpostal, Cuenta, pagadores, NEMP, fecha_baja, coddistri, Nomdistri, bloque, BajoNombre, BajoNIF, BajoFdenominacion, Notas, created_at")
+    .select("id, Codigo, id_persona, Nombre, NIF, Fdenominacion, Coeficiente, Movil, TelefonoFijo, Email, Web, Fax, Direccion, Cpostal, Cuenta, pagadores, NEMP, fecha_baja, coddistri, Nomdistri, bloque, BajoNombre, BajoNIF, BajoFdenominacion, Notas, NumComunidad, created_at")
     .order("created_at", { ascending: false });
   if (error) throw error;
   return (data ?? []) as Cliente[];
@@ -168,6 +170,7 @@ function ContactsPage() {
         Notas: input.Notas || null,
         Codigo: input.Codigo || null,
         id_persona: input.id_persona || null,
+        NumComunidad: input.NumComunidad ? parseFloat(input.NumComunidad) : null,
       });
       if (error) throw error;
     },
@@ -265,6 +268,10 @@ function ContactsPage() {
             <div className="space-y-1">
               <label className="text-xs font-medium text-muted-foreground">Fecha de baja</label>
               <input value={form.fecha_baja} onChange={setField("fecha_baja")} type="date" className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Núm. comunidad</label>
+              <input value={form.NumComunidad} onChange={setField("NumComunidad")} type="number" step="1" placeholder="0" className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring" />
             </div>
           </div>
         </fieldset>
@@ -425,6 +432,9 @@ function ContactsPage() {
                   <div className="font-medium truncate">
                     {c.Nombre ?? "(sin nombre)"}
                     {c.NIF && <span className="ml-2 text-xs text-muted-foreground font-mono">{c.NIF}</span>}
+                    {c.NumComunidad != null && (
+                      <span className="ml-2 text-xs text-muted-foreground">Com. {c.NumComunidad}</span>
+                    )}
                   </div>
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5">
                     {c.Movil && (

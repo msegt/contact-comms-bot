@@ -36,6 +36,7 @@ export type Database = {
           BajoNIF: string | null;
           BajoFdenominacion: string | null;
           Notas: string | null;
+          NumComunidad: number | null;
           created_at: string;
           updated_at: string;
         };
@@ -65,6 +66,7 @@ export type Database = {
           BajoNIF?: string | null;
           BajoFdenominacion?: string | null;
           Notas?: string | null;
+          NumComunidad?: number | null;
           created_at?: string;
           updated_at?: string;
         };
