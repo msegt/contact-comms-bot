@@ -1,5 +1,4 @@
 import { createServerFn } from "@tanstack/react-start";
-import { getEvent } from "vinxi/http";
 import { z } from "zod";
 import { createClient } from "@supabase/supabase-js";
 
@@ -10,20 +9,19 @@ const sendSchema = z.object({
   message_body: z.string().min(1).max(4096),
 });
 
-/** Read a secret from the Cloudflare Worker env binding first,
- *  then fall back to process.env for local dev. */
+/**
+ * Read a secret. On Cloudflare Workers with nodejs_compat_populate_process_env
+ * the Worker bindings ARE available on process.env at runtime, but only after
+ * the first request has been handled (not at module initialisation time).
+ * We therefore read inside the handler, never at the top level.
+ */
 function getSecret(key: string): string | undefined {
-  try {
-    // In a Cloudflare Worker the env bindings are attached to the incoming
-    // request event by vinxi/h3 under event.context.cloudflare.env
-    const event = getEvent();
-    const cfEnv = (event?.context as Record<string, unknown> | undefined)
-      ?.cloudflare as Record<string, unknown> | undefined;
-    const val = cfEnv?.env ? (cfEnv.env as Record<string, unknown>)[key] : undefined;
-    if (typeof val === "string" && val.length > 0) return val;
-  } catch {
-    // not inside a request context — fall through
-  }
+  // Cloudflare Workers: bindings are also accessible as properties on
+  // the global scope under the same name when nodejs_compat is enabled.
+  // Try globalThis first (works in the Worker runtime), then process.env
+  // (works locally and as a fallback).
+  const fromGlobal = (globalThis as Record<string, unknown>)[key];
+  if (typeof fromGlobal === "string" && fromGlobal.length > 0) return fromGlobal;
   return process.env[key];
 }
 
