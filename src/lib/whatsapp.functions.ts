@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { getEvent } from "vinxi/http";
 import { z } from "zod";
 import { createClient } from "@supabase/supabase-js";
 
@@ -9,11 +10,28 @@ const sendSchema = z.object({
   message_body: z.string().min(1).max(4096),
 });
 
+/** Read a secret from the Cloudflare Worker env binding first,
+ *  then fall back to process.env for local dev. */
+function getSecret(key: string): string | undefined {
+  try {
+    // In a Cloudflare Worker the env bindings are attached to the incoming
+    // request event by vinxi/h3 under event.context.cloudflare.env
+    const event = getEvent();
+    const cfEnv = (event?.context as Record<string, unknown> | undefined)
+      ?.cloudflare as Record<string, unknown> | undefined;
+    const val = cfEnv?.env ? (cfEnv.env as Record<string, unknown>)[key] : undefined;
+    if (typeof val === "string" && val.length > 0) return val;
+  } catch {
+    // not inside a request context — fall through
+  }
+  return process.env[key];
+}
+
 export const sendWhatsAppMessage = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => sendSchema.parse(input))
   .handler(async ({ data }) => {
-    const token = process.env.WHATSAPP_ACCESS_TOKEN;
-    const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+    const token = getSecret("WHATSAPP_ACCESS_TOKEN");
+    const phoneNumberId = getSecret("WHATSAPP_PHONE_NUMBER_ID");
 
     if (!token || !phoneNumberId) {
       return { ok: false as const, error: "Las credenciales de WhatsApp no están configuradas en el servidor." };
@@ -63,8 +81,8 @@ export const sendWhatsAppMessage = createServerFn({ method: "POST" })
       };
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const supabaseUrl = getSecret("SUPABASE_URL");
+    const serviceKey = getSecret("SUPABASE_SERVICE_ROLE_KEY");
     if (!supabaseUrl || !serviceKey) {
       console.error("Missing Supabase credentials; message sent but not logged");
       return { ok: true as const };
