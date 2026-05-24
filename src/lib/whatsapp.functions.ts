@@ -3,10 +3,10 @@ import { z } from "zod";
 import { createClient } from "@supabase/supabase-js";
 
 const sendSchema = z.object({
-  recipient_phone: z.string().regex(/^\+[1-9]\d{6,14}$/),
-  message_body: z.string().min(1).max(4096),
   cliente_id: z.string().uuid(),
   nombre_cliente: z.string().min(1),
+  recipient_phone: z.string().regex(/^\+[1-9]\d{6,14}$/),
+  message_body: z.string().min(1).max(4096),
 });
 
 export const sendWhatsAppMessage = createServerFn({ method: "POST" })
@@ -48,19 +48,24 @@ export const sendWhatsAppMessage = createServerFn({ method: "POST" })
       };
 
       if (!res.ok) {
-        const msg = json.error?.error_data?.details ?? json.error?.message ?? "Error desconocido de WhatsApp";
+        const msg =
+          json.error?.error_data?.details ??
+          json.error?.message ??
+          "Error desconocido de WhatsApp";
         return { ok: false as const, error: msg };
       }
 
       wamid = json.messages?.[0]?.id ?? null;
     } catch (err) {
-      return { ok: false as const, error: err instanceof Error ? err.message : "Error de red" };
+      return {
+        ok: false as const,
+        error: err instanceof Error ? err.message : "Error de red",
+      };
     }
 
     const supabaseUrl = process.env.SUPABASE_URL;
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (!supabaseUrl || !serviceKey) {
-      // Message was sent successfully — just can't log it
       console.error("Missing Supabase credentials; message sent but not logged");
       return { ok: true as const };
     }
