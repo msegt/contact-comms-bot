@@ -9,30 +9,30 @@ const sendSchema = z.object({
   message_body: z.string().min(1).max(4096),
 });
 
-/**
- * Read a secret. On Cloudflare Workers with nodejs_compat_populate_process_env
- * the Worker bindings ARE available on process.env at runtime, but only after
- * the first request has been handled (not at module initialisation time).
- * We therefore read inside the handler, never at the top level.
- */
-function getSecret(key: string): string | undefined {
-  // Cloudflare Workers: bindings are also accessible as properties on
-  // the global scope under the same name when nodejs_compat is enabled.
-  // Try globalThis first (works in the Worker runtime), then process.env
-  // (works locally and as a fallback).
-  const fromGlobal = (globalThis as Record<string, unknown>)[key];
-  if (typeof fromGlobal === "string" && fromGlobal.length > 0) return fromGlobal;
-  return process.env[key];
-}
-
 export const sendWhatsAppMessage = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => sendSchema.parse(input))
   .handler(async ({ data }) => {
-    const token = getSecret("WHATSAPP_ACCESS_TOKEN");
-    const phoneNumberId = getSecret("WHATSAPP_PHONE_NUMBER_ID");
+    // --- Diagnostic: log exactly what is visible from each access method ---
+    const tokenFromProcess = process.env.WHATSAPP_ACCESS_TOKEN;
+    const tokenFromGlobal = (globalThis as Record<string, unknown>).WHATSAPP_ACCESS_TOKEN;
+    const phoneFromProcess = process.env.WHATSAPP_PHONE_NUMBER_ID;
+    const phoneFromGlobal = (globalThis as Record<string, unknown>).WHATSAPP_PHONE_NUMBER_ID;
+
+    console.log("[env-debug] process.env token:", tokenFromProcess ? `SET (${String(tokenFromProcess).length} chars)` : "MISSING");
+    console.log("[env-debug] globalThis token:", tokenFromGlobal ? `SET (${String(tokenFromGlobal).length} chars)` : "MISSING");
+    console.log("[env-debug] process.env phoneId:", phoneFromProcess ? `SET` : "MISSING");
+    console.log("[env-debug] globalThis phoneId:", phoneFromGlobal ? `SET` : "MISSING");
+    console.log("[env-debug] process.env keys:", Object.keys(process.env).filter(k => k.includes("WHATS") || k.includes("SUPA")).join(", ") || "none matching");
+    // --- End diagnostic ---
+
+    const token = tokenFromProcess ?? (typeof tokenFromGlobal === "string" ? tokenFromGlobal : undefined);
+    const phoneNumberId = phoneFromProcess ?? (typeof phoneFromGlobal === "string" ? phoneFromGlobal : undefined);
 
     if (!token || !phoneNumberId) {
-      return { ok: false as const, error: "Las credenciales de WhatsApp no están configuradas en el servidor." };
+      return {
+        ok: false as const,
+        error: `Las credenciales de WhatsApp no están configuradas en el servidor. [debug: process.env token=${tokenFromProcess ? "SET" : "MISSING"}, globalThis token=${tokenFromGlobal ? "SET" : "MISSING"}]`,
+      };
     }
 
     const to = data.recipient_phone.startsWith("+")
@@ -79,8 +79,8 @@ export const sendWhatsAppMessage = createServerFn({ method: "POST" })
       };
     }
 
-    const supabaseUrl = getSecret("SUPABASE_URL");
-    const serviceKey = getSecret("SUPABASE_SERVICE_ROLE_KEY");
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (!supabaseUrl || !serviceKey) {
       console.error("Missing Supabase credentials; message sent but not logged");
       return { ok: true as const };
