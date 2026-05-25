@@ -32,6 +32,10 @@ import {
   Calendar,
   CreditCard,
   Info,
+  ExternalLink,
+  BadgeCheck,
+  Banknote,
+  Home,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/Skeleton";
@@ -449,7 +453,6 @@ function ClienteFormFields({
   const firstInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    // Small delay to let the sheet animate in before focusing
     const t = setTimeout(() => firstInputRef.current?.focus(), 150);
     return () => clearTimeout(t);
   }, []);
@@ -496,7 +499,6 @@ function ClienteFormFields({
           <>
             <fieldset className="space-y-3">
               <legend className={sectionTitleCls}>Identificación</legend>
-              {/* Required: Nombre full-width */}
               <div className="space-y-1">
                 <label className={labelCls}>Nombre completo <span className="text-destructive">*</span></label>
                 <input ref={firstInputRef} value={form.Nombre} onChange={setField("Nombre")} placeholder="Jane Smith" className={inp("Nombre")} />
@@ -623,7 +625,6 @@ function ClienteFormFields({
               </div>
             </div>
 
-            {/* Phone format hint */}
             <div className="flex items-start gap-2 rounded-md border border-border bg-muted/40 px-3 py-2.5">
               <Info className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
               <p className="text-xs text-muted-foreground">
@@ -722,7 +723,6 @@ function ClienteSheet({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const isEdit = mode === "edit" && !!cliente;
 
-  // Close on Escape
   useEffect(() => {
     function onKey(e: KeyboardEvent) { if (e.key === "Escape") onClose(); }
     document.addEventListener("keydown", onKey);
@@ -777,11 +777,9 @@ function ClienteSheet({
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    // Run full schema validation to catch any remaining issues
     const parsed = clienteSchema.safeParse(form);
     if (!parsed.success) {
       const firstIssue = parsed.error.issues[0];
-      // Also set inline error for the specific field
       const fieldName = firstIssue.path[0] as keyof typeof EMPTY_FORM;
       setFieldErrors((prev) => ({ ...prev, [fieldName]: firstIssue.message }));
       setSubmitError(firstIssue.message);
@@ -864,23 +862,229 @@ function ClienteSheet({
   );
 }
 
+// ─── Detail info row helper ───────────────────────────────────────────────────
+function DetailRow({ icon: Icon, label, value, mono = false, href }: {
+  icon: React.ElementType; label: string; value: string | number | null | undefined; mono?: boolean; href?: string;
+}) {
+  if (!value && value !== 0) return null;
+  return (
+    <div className="flex items-start gap-3 py-2.5 border-b border-border last:border-0">
+      <div className="grid place-items-center h-7 w-7 rounded-md bg-muted text-muted-foreground shrink-0 mt-0.5">
+        <Icon className="h-3.5 w-3.5" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-[11px] text-muted-foreground uppercase tracking-wide font-medium">{label}</p>
+        {href ? (
+          <a href={href} target="_blank" rel="noopener noreferrer"
+            className={`text-sm text-primary hover:underline flex items-center gap-1 ${mono ? "font-mono" : ""}`}>
+            {String(value)} <ExternalLink className="h-3 w-3 shrink-0" />
+          </a>
+        ) : (
+          <p className={`text-sm text-foreground break-words ${mono ? "font-mono" : ""}`}>{String(value)}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Cliente detail drawer ────────────────────────────────────────────────────
+function ClienteDetailDrawer({
+  cliente,
+  onClose,
+  onEdit,
+  onCompose,
+  onDelete,
+}: {
+  cliente: Cliente;
+  onClose: () => void;
+  onEdit: () => void;
+  onCompose: () => void;
+  onDelete: () => void;
+}) {
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) { if (e.key === "Escape") onClose(); }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const initials = (cliente.Nombre ?? "?")
+    .split(" ")
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase();
+
+  const hasContact = cliente.Movil || cliente.Email || cliente.TelefonoFijo;
+
+  return (
+    <div className="fixed inset-0 z-30 flex" role="dialog" aria-modal="true" aria-label="Detalle del contacto">
+      <div className="absolute inset-0 bg-foreground/20 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative ml-auto h-full w-full max-w-sm bg-background border-l border-border shadow-2xl flex flex-col animate-in slide-in-from-right duration-200">
+
+        {/* Header strip */}
+        <div className="shrink-0 bg-primary/5 border-b border-border px-5 pt-6 pb-5">
+          <div className="flex items-start justify-between mb-4">
+            <div className="grid place-items-center h-14 w-14 rounded-full bg-primary/10 text-primary text-xl font-bold select-none">
+              {initials}
+            </div>
+            <button onClick={onClose} aria-label="Cerrar" className="grid place-items-center h-8 w-8 rounded-md hover:bg-accent transition-colors -mr-1">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="font-semibold text-lg leading-tight">{cliente.Nombre ?? <span className="text-muted-foreground italic font-normal">Sin nombre</span>}</h2>
+              {cliente.fecha_baja && (
+                <span className="inline-flex items-center rounded-full bg-destructive/10 text-destructive text-[10px] font-semibold px-2 py-0.5 uppercase tracking-wide">Baja</span>
+              )}
+            </div>
+            <div className="flex items-center gap-2 mt-1 flex-wrap">
+              {cliente.NumComunidad != null && (
+                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground bg-muted rounded-full px-2.5 py-0.5">
+                  <Hash className="h-3 w-3" /> Comunidad {cliente.NumComunidad}
+                </span>
+              )}
+              {cliente.NIF && (
+                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground bg-muted rounded-full px-2.5 py-0.5 font-mono">
+                  <BadgeCheck className="h-3 w-3" /> {cliente.NIF}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Action buttons */}
+          <div className="flex gap-2 mt-4">
+            {cliente.Movil && (
+              <button
+                onClick={onCompose}
+                className="flex-1 h-9 rounded-md bg-green-600 text-white text-xs font-medium hover:bg-green-700 inline-flex items-center justify-center gap-1.5 transition-colors"
+              >
+                <Send className="h-3.5 w-3.5" /> WhatsApp
+              </button>
+            )}
+            <button
+              onClick={onEdit}
+              className="flex-1 h-9 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 inline-flex items-center justify-center gap-1.5 transition-colors"
+            >
+              <Pencil className="h-3.5 w-3.5" /> Editar
+            </button>
+            <button
+              onClick={onDelete}
+              className="h-9 w-9 rounded-md border border-border text-muted-foreground hover:bg-destructive/10 hover:text-destructive inline-flex items-center justify-center transition-colors"
+              aria-label="Eliminar contacto"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Scrollable detail body */}
+        <div className="flex-1 overflow-y-auto px-5 py-3 space-y-1">
+
+          {/* Contact */}
+          {hasContact && (
+            <section>
+              <p className={sectionTitleCls}><Phone className="h-3.5 w-3.5" /> Contacto</p>
+              <DetailRow icon={Phone} label="Móvil (WhatsApp)" value={cliente.Movil} mono href={`https://wa.me/${cliente.Movil?.replace("+", "")}`} />
+              <DetailRow icon={Phone} label="Teléfono fijo" value={cliente.TelefonoFijo} mono />
+              <DetailRow icon={Mail} label="Email" value={cliente.Email} href={`mailto:${cliente.Email}`} />
+              <DetailRow icon={Phone} label="Fax" value={cliente.Fax} mono />
+              <DetailRow icon={Globe} label="Web" value={cliente.Web} href={cliente.Web ?? undefined} />
+            </section>
+          )}
+
+          {/* Address */}
+          {(cliente.Direccion || cliente.Cpostal || cliente.bloque || cliente.coddistri) && (
+            <section>
+              <p className={sectionTitleCls}><Home className="h-3.5 w-3.5" /> Dirección</p>
+              <DetailRow icon={MapPin} label="Dirección" value={cliente.Direccion} />
+              <DetailRow icon={MapPin} label="Código postal" value={cliente.Cpostal} />
+              <DetailRow icon={Building2} label="Bloque" value={cliente.bloque} />
+              <DetailRow icon={Hash} label="Cód. distribución" value={cliente.coddistri} />
+              <DetailRow icon={Hash} label="Nom. distribución" value={cliente.Nomdistri} />
+            </section>
+          )}
+
+          {/* Economic */}
+          {(cliente.Coeficiente != null || cliente.Cuenta || cliente.pagadores || cliente.NEMP) && (
+            <section>
+              <p className={sectionTitleCls}><Banknote className="h-3.5 w-3.5" /> Económico</p>
+              <DetailRow icon={Hash} label="Coeficiente" value={cliente.Coeficiente} />
+              <DetailRow icon={CreditCard} label="Cuenta bancaria" value={cliente.Cuenta} mono />
+              <DetailRow icon={Users} label="Pagadores" value={cliente.pagadores} />
+              <DetailRow icon={Hash} label="NEMP" value={cliente.NEMP} />
+            </section>
+          )}
+
+          {/* Fiscal */}
+          {(cliente.Fdenominacion || cliente.Codigo || cliente.id_persona) && (
+            <section>
+              <p className={sectionTitleCls}><BadgeCheck className="h-3.5 w-3.5" /> Fiscal / Sistema</p>
+              <DetailRow icon={FileText} label="Denominación fiscal" value={cliente.Fdenominacion} />
+              <DetailRow icon={Hash} label="Código" value={cliente.Codigo} mono />
+              <DetailRow icon={Hash} label="ID Persona" value={cliente.id_persona} mono />
+            </section>
+          )}
+
+          {/* Bajo */}
+          {(cliente.BajoNombre || cliente.BajoNIF || cliente.BajoFdenominacion) && (
+            <section>
+              <p className={sectionTitleCls}><Building2 className="h-3.5 w-3.5" /> Bajo</p>
+              <DetailRow icon={UserPlus} label="Nombre bajo" value={cliente.BajoNombre} />
+              <DetailRow icon={BadgeCheck} label="NIF bajo" value={cliente.BajoNIF} mono />
+              <DetailRow icon={FileText} label="Fdenominación bajo" value={cliente.BajoFdenominacion} />
+            </section>
+          )}
+
+          {/* Notes */}
+          {cliente.Notas && (
+            <section>
+              <p className={sectionTitleCls}><StickyNote className="h-3.5 w-3.5" /> Notas</p>
+              <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed py-2">{cliente.Notas}</p>
+            </section>
+          )}
+
+          {/* Dates */}
+          <section>
+            <p className={sectionTitleCls}><Calendar className="h-3.5 w-3.5" /> Fechas</p>
+            <DetailRow icon={Calendar} label="Fecha de baja" value={cliente.fecha_baja} />
+            <DetailRow icon={Calendar} label="Creado" value={new Date(cliente.created_at).toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" })} />
+          </section>
+        </div>
+
+        <p className="shrink-0 text-center text-[11px] text-muted-foreground py-2 border-t border-border">
+          Pulsa <kbd className="font-mono bg-muted px-1 rounded">Esc</kbd> para cerrar
+        </p>
+      </div>
+    </div>
+  );
+}
+
 // ─── Contact card row ─────────────────────────────────────────────────────────
 function ContactRow({
   cliente,
+  onView,
   onEdit,
   onDelete,
   onCompose,
 }: {
   cliente: Cliente;
+  onView: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onCompose: () => void;
 }) {
   const hasMobile = !!cliente.Movil;
-  const hasEmail = !!cliente.Email;
 
   return (
-    <div className="group flex items-center gap-3 px-4 py-3 hover:bg-accent/40 transition-colors">
+    <div
+      className="group flex items-center gap-3 px-4 py-3 hover:bg-accent/40 transition-colors cursor-pointer"
+      onClick={onView}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onView(); } }}
+      aria-label={`Ver detalle de ${cliente.Nombre ?? "contacto"}`}
+    >
       {/* Avatar */}
       <div className="grid place-items-center h-9 w-9 rounded-full bg-primary/10 text-primary font-semibold text-sm shrink-0 select-none">
         {(cliente.Nombre ?? "?")[0].toUpperCase()}
@@ -908,8 +1112,11 @@ function ContactRow({
         </span>
       )}
 
-      {/* Actions — visible on hover */}
-      <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+      {/* Actions — stop propagation so they don't open the detail */}
+      <div
+        className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
+        onClick={(e) => e.stopPropagation()}
+      >
         {hasMobile && (
           <button
             onClick={onCompose}
@@ -949,6 +1156,7 @@ function ContactsPage() {
   const [composeFor, setComposeFor] = useState<Cliente | null>(null);
   const [composeBulk, setComposeBulk] = useState<{ num: number; clientes: Cliente[] } | null>(null);
   const [clienteSheet, setClienteSheet] = useState<{ mode: "add" | "edit"; cliente?: Cliente } | null>(null);
+  const [detailFor, setDetailFor] = useState<Cliente | null>(null);
 
   const [nameSearch, setNameSearch] = useState("");
   const [communityFilter, setCommunityFilter] = useState("");
@@ -1010,13 +1218,13 @@ function ContactsPage() {
       qc.invalidateQueries({ queryKey: ["contacts"] });
       qc.invalidateQueries({ queryKey: ["stats"] });
       toast.success("Contacto eliminado");
+      setDetailFor(null);
     },
     onError: (e: Error) => toast.error(e.message),
   });
 
   const searchRef = useRef<HTMLInputElement>(null);
 
-  // Global shortcut: / focuses search
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "/" && document.activeElement?.tagName !== "INPUT" && document.activeElement?.tagName !== "TEXTAREA") {
@@ -1027,6 +1235,11 @@ function ContactsPage() {
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, []);
+
+  function handleDeleteCliente(c: Cliente) {
+    if (confirm(`¿Eliminar a "${c.Nombre ?? "este contacto"}"? Esta acción no se puede deshacer.`))
+      deleteCliente.mutate(c.id);
+  }
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -1132,7 +1345,6 @@ function ContactsPage() {
               const label = key === "__sin_comunidad__" ? "Sin comunidad" : `Comunidad ${key}`;
               return (
                 <div key={key}>
-                  {/* Group header */}
                   <button
                     type="button"
                     onClick={() => toggleGroup(key)}
@@ -1157,18 +1369,15 @@ function ContactsPage() {
                     )}
                   </button>
 
-                  {/* Members */}
                   {!isCollapsed && (
                     <div>
                       {members.map((c) => (
                         <ContactRow
                           key={c.id}
                           cliente={c}
+                          onView={() => setDetailFor(c)}
                           onEdit={() => setClienteSheet({ mode: "edit", cliente: c })}
-                          onDelete={() => {
-                            if (confirm(`¿Eliminar a "${c.Nombre ?? "este contacto"}"? Esta acción no se puede deshacer.`))
-                              deleteCliente.mutate(c.id);
-                          }}
+                          onDelete={() => handleDeleteCliente(c)}
                           onCompose={() => setComposeFor(c)}
                         />
                       ))}
@@ -1180,6 +1389,17 @@ function ContactsPage() {
           </div>
         )}
       </div>
+
+      {/* ── Detail drawer ── */}
+      {detailFor && (
+        <ClienteDetailDrawer
+          cliente={detailFor}
+          onClose={() => setDetailFor(null)}
+          onEdit={() => { setClienteSheet({ mode: "edit", cliente: detailFor }); setDetailFor(null); }}
+          onCompose={() => { setComposeFor(detailFor); setDetailFor(null); }}
+          onDelete={() => handleDeleteCliente(detailFor)}
+        />
+      )}
 
       {/* ── Compose single ── */}
       {composeFor && (
