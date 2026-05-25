@@ -36,6 +36,8 @@ import {
   BadgeCheck,
   Banknote,
   Home,
+  IdCard,
+  RefreshCw,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/Skeleton";
@@ -45,8 +47,8 @@ import { useServerFn } from "@tanstack/react-start";
 export const Route = createFileRoute("/contacts")({
   head: () => ({
     meta: [
-      { title: "Contacts - WhatsBoard" },
-      { name: "description", content: "Manage WhatsApp contacts and send messages." },
+      { title: "Contactos - WhatsBoard" },
+      { name: "description", content: "Gestiona tus contactos de WhatsApp Business." },
     ],
   }),
   component: ContactsPage,
@@ -101,7 +103,7 @@ function fileIcon(mime: string) {
   if (mime.startsWith("image/")) return "IMG";
   if (mime.includes("word")) return "DOC";
   if (mime.includes("excel") || mime.includes("spreadsheet")) return "XLS";
-  return "FILE";
+  return "ARCH";
 }
 
 const phoneRegex = /^\+[1-9]\d{6,14}$/;
@@ -114,19 +116,19 @@ const clienteSchema = z.object({
   Movil: z
     .string()
     .trim()
-    .regex(phoneRegex, "El móvil debe estar en formato E.164, ej. +34611123456")
+    .regex(phoneRegex, "Formato E.164, p.ej. +34611123456")
     .optional()
     .or(z.literal("")),
   TelefonoFijo: z
     .string()
     .trim()
-    .regex(phoneRegex, "El fijo debe estar en formato E.164, ej. +34911123456")
+    .regex(phoneRegex, "Formato E.164, p.ej. +34911123456")
     .optional()
     .or(z.literal("")),
   Email: z
     .string()
     .trim()
-    .email("Introduce un email válido")
+    .email("Introduce un correo electrónico válido")
     .optional()
     .or(z.literal("")),
   Web: z.string().trim().max(300).optional().or(z.literal("")),
@@ -218,15 +220,64 @@ const sectionTitleCls = "text-[11px] font-semibold text-muted-foreground upperca
 function FieldError({ msg }: { msg?: string }) {
   if (!msg) return null;
   return (
-    <p className="flex items-center gap-1 text-[11px] text-destructive mt-0.5">
+    <p className="flex items-center gap-1 text-[11px] text-destructive mt-0.5" role="alert">
       <AlertCircle className="h-3 w-3 shrink-0" />{msg}
     </p>
   );
 }
 
+// ─── Delete confirmation dialog ───────────────────────────────────────────────
+function DeleteConfirmDialog({
+  nombre,
+  onConfirm,
+  onCancel,
+  isPending,
+}: {
+  nombre: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+  isPending: boolean;
+}) {
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) { if (e.key === "Escape") onCancel(); }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onCancel]);
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center" role="dialog" aria-modal="true" aria-labelledby="delete-dialog-title">
+      <div className="absolute inset-0 bg-foreground/40 backdrop-blur-sm" onClick={onCancel} />
+      <div className="relative w-full max-w-sm mx-4 bg-background rounded-xl border border-border shadow-2xl p-6 animate-in fade-in zoom-in-95 duration-150">
+        <div className="grid place-items-center h-12 w-12 rounded-full bg-destructive/10 text-destructive mx-auto mb-4">
+          <Trash2 className="h-5 w-5" />
+        </div>
+        <h2 id="delete-dialog-title" className="text-base font-semibold text-center mb-1">¿Eliminar contacto?</h2>
+        <p className="text-sm text-muted-foreground text-center mb-5">
+          Se eliminará <span className="font-medium text-foreground">{nombre}</span> de forma permanente. Esta acción no se puede deshacer.
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={onCancel}
+            className="flex-1 h-10 rounded-md border border-border text-sm font-medium hover:bg-accent transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={isPending}
+            className="flex-1 h-10 rounded-md bg-destructive text-destructive-foreground text-sm font-medium hover:bg-destructive/90 disabled:opacity-60 inline-flex items-center justify-center gap-2 transition-colors"
+          >
+            {isPending ? <><Loader2 className="h-4 w-4 animate-spin" /> Eliminando…</> : <><Trash2 className="h-4 w-4" /> Eliminar</>}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── NumComunidad combobox ────────────────────────────────────────────────────
 function NumComunidadCombobox({
-  options, value, onChange, placeholder = "Buscar o escribir nº comunidad…",
+  options, value, onChange, placeholder = "Buscar nº comunidad…",
 }: {
   options: number[]; value: string; onChange: (v: string) => void; placeholder?: string;
 }) {
@@ -258,13 +309,16 @@ function NumComunidadCombobox({
           className={inputIconCls}
           onFocus={() => setOpen(true)}
           onChange={(e) => { setQuery(e.target.value); onChange(e.target.value); setOpen(true); }}
+          aria-label={placeholder}
+          aria-expanded={open}
+          aria-haspopup="listbox"
         />
         <ChevronsUpDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
       </div>
       {open && filtered.length > 0 && (
-        <ul className="absolute z-50 mt-1 w-full max-h-48 overflow-y-auto rounded-md border border-border bg-popover shadow-lg text-sm">
+        <ul role="listbox" className="absolute z-50 mt-1 w-full max-h-48 overflow-y-auto rounded-md border border-border bg-popover shadow-lg text-sm">
           {filtered.map((n) => (
-            <li key={n} className="px-3 py-2 cursor-pointer hover:bg-accent flex items-center gap-2"
+            <li key={n} role="option" aria-selected={query === String(n)} className="px-3 py-2 cursor-pointer hover:bg-accent flex items-center gap-2"
               onMouseDown={() => { onChange(String(n)); setQuery(String(n)); setOpen(false); }}>
               <Hash className="h-3 w-3 text-muted-foreground" /> Comunidad {n}
             </li>
@@ -326,7 +380,7 @@ function TemplatePicker({ onSelect, onClose }: { onSelect: (cuerpo: string) => v
           <button onClick={startCreate} className="h-7 px-2.5 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 inline-flex items-center gap-1">
             <Plus className="h-3 w-3" /> Nueva
           </button>
-          <button onClick={onClose} className="grid place-items-center h-7 w-7 rounded-md hover:bg-accent"><X className="h-3.5 w-3.5" /></button>
+          <button onClick={onClose} className="grid place-items-center h-7 w-7 rounded-md hover:bg-accent" aria-label="Cerrar plantillas"><X className="h-3.5 w-3.5" /></button>
         </div>
       </div>
       <div className="flex-1 overflow-y-auto">
@@ -345,7 +399,7 @@ function TemplatePicker({ onSelect, onClose }: { onSelect: (cuerpo: string) => v
               <textarea value={editCuerpo} onChange={(e) => { setEditCuerpo(e.target.value); setEditError(null); }} rows={5} maxLength={4096} placeholder="Texto de la plantilla…" className="w-full rounded-md border border-input bg-background p-2.5 text-sm outline-none focus:ring-2 focus:ring-ring resize-none" />
               <div className="text-xs text-muted-foreground text-right">{editCuerpo.length}/4096</div>
             </div>
-            {editError && <p className="text-xs text-destructive">{editError}</p>}
+            {editError && <p className="text-xs text-destructive" role="alert">{editError}</p>}
             <div className="flex gap-2">
               <button onClick={cancelEdit} className="flex-1 h-8 rounded-md border border-border text-xs font-medium hover:bg-accent">Cancelar</button>
               <button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} className="flex-1 h-8 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 disabled:opacity-60 inline-flex items-center justify-center gap-1">
@@ -360,8 +414,8 @@ function TemplatePicker({ onSelect, onClose }: { onSelect: (cuerpo: string) => v
         ) : plantillas.length === 0 ? (
           <div className="p-6 text-center">
             <FileText className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-            <p className="text-sm text-muted-foreground">No hay plantillas todavía.</p>
-            <p className="text-xs text-muted-foreground mt-1">Crea la primera con el botón "Nueva".</p>
+            <p className="text-sm text-muted-foreground">Todavía no hay plantillas.</p>
+            <p className="text-xs text-muted-foreground mt-1">Crea la primera con el botón «Nueva».</p>
           </div>
         ) : (
           <ul className="divide-y divide-border">
@@ -374,8 +428,8 @@ function TemplatePicker({ onSelect, onClose }: { onSelect: (cuerpo: string) => v
                     <p className="text-xs text-muted-foreground mt-1 line-clamp-2 italic">{p.cuerpo}</p>
                   </div>
                   <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => startEdit(p)} className="grid place-items-center h-7 w-7 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground" aria-label="Editar plantilla"><Pencil className="h-3.5 w-3.5" /></button>
-                    <button onClick={() => { if (confirm(`¿Eliminar la plantilla "${p.nombre}"?`)) deleteMutation.mutate(p.id); }} className="grid place-items-center h-7 w-7 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive" aria-label="Eliminar plantilla"><Trash2 className="h-3.5 w-3.5" /></button>
+                    <button onClick={() => startEdit(p)} className="grid place-items-center h-7 w-7 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground" aria-label={`Editar plantilla ${p.nombre}`}><Pencil className="h-3.5 w-3.5" /></button>
+                    <button onClick={() => { if (confirm(`¿Eliminar la plantilla «${p.nombre}»?`)) deleteMutation.mutate(p.id); }} className="grid place-items-center h-7 w-7 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive" aria-label={`Eliminar plantilla ${p.nombre}`}><Trash2 className="h-3.5 w-3.5" /></button>
                   </div>
                 </div>
               </li>
@@ -397,7 +451,7 @@ function AttachmentPicker({ file, onChange }: { file: File | null; onChange: (f:
   }
   return (
     <div className="space-y-1.5">
-      <label className="text-sm font-medium">Adjunto (opcional)</label>
+      <label className="text-sm font-medium">Archivo adjunto <span className="text-muted-foreground font-normal">(opcional)</span></label>
       <div className="flex items-center gap-2">
         <button type="button" onClick={() => ref.current?.click()} className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-dashed border-border text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-colors">
           <Paperclip className="h-3.5 w-3.5" />{file ? "Cambiar archivo" : "Adjuntar archivo"}
@@ -419,7 +473,7 @@ function AttachmentPicker({ file, onChange }: { file: File | null; onChange: (f:
 
 // ─── Tab definitions for the cliente sheet ────────────────────────────────────
 const TABS = [
-  { id: "principal", label: "Principal", icon: UserPlus },
+  { id: "principal", label: "Principal", icon: IdCard },
   { id: "contacto",  label: "Contacto",  icon: Phone },
   { id: "direccion", label: "Dirección", icon: MapPin },
   { id: "avanzado",  label: "Avanzado",  icon: Building2 },
@@ -432,9 +486,9 @@ type FieldErrors = Partial<Record<keyof typeof EMPTY_FORM, string>>;
 function validateField(field: keyof typeof EMPTY_FORM, value: string): string | undefined {
   if (field === "Nombre" && !value.trim()) return "El nombre es obligatorio";
   if ((field === "Movil" || field === "TelefonoFijo" || field === "Fax") && value.trim() && !phoneRegex.test(value.trim()))
-    return "Formato E.164, ej. +34611123456";
+    return "Formato E.164, p.ej. +34611123456";
   if (field === "Email" && value.trim()) {
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())) return "Email no válido";
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())) return "Correo electrónico no válido";
   }
   return undefined;
 }
@@ -471,24 +525,37 @@ function ClienteFormFields({
   const inpIcon = (field: keyof typeof EMPTY_FORM) =>
     fieldErrors[field] ? inputIconInvalidCls : inputIconCls;
 
+  // Count errors per tab for badges
+  const principalFields: (keyof typeof EMPTY_FORM)[] = ["Nombre", "NIF", "NumComunidad", "Codigo", "id_persona", "Fdenominacion", "Coeficiente", "Cuenta", "NEMP", "fecha_baja", "pagadores", "Notas"];
+  const contactoFields: (keyof typeof EMPTY_FORM)[] = ["Movil", "TelefonoFijo", "Email", "Fax", "Web"];
+  const errorCount = (fields: (keyof typeof EMPTY_FORM)[]) => fields.filter((f) => fieldErrors[f]).length;
+
   return (
     <div className="flex flex-col h-full">
       {/* Tab bar */}
-      <div className="flex gap-0.5 px-4 pt-3 pb-0 border-b border-border shrink-0 bg-muted/20">
-        {TABS.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setActiveTab(id)}
-            className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-t-md border-b-2 transition-colors ${
-              activeTab === id
-                ? "border-primary text-primary bg-background"
-                : "border-transparent text-muted-foreground hover:text-foreground hover:bg-accent/50"
-            }`}
-          >
-            <Icon className="h-3.5 w-3.5" />{label}
-          </button>
-        ))}
+      <div className="flex gap-0.5 px-4 pt-3 pb-0 border-b border-border shrink-0 bg-muted/20" role="tablist">
+        {TABS.map(({ id, label, icon: Icon }) => {
+          const errCnt = id === "principal" ? errorCount(principalFields) : id === "contacto" ? errorCount(contactoFields) : 0;
+          return (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === id}
+              onClick={() => setActiveTab(id)}
+              className={`relative flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-t-md border-b-2 transition-colors ${
+                activeTab === id
+                  ? "border-primary text-primary bg-background"
+                  : "border-transparent text-muted-foreground hover:text-foreground hover:bg-accent/50"
+              }`}
+            >
+              <Icon className="h-3.5 w-3.5" />{label}
+              {errCnt > 0 && (
+                <span className="ml-0.5 grid place-items-center h-4 w-4 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold">{errCnt}</span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {/* Tab content */}
@@ -500,8 +567,8 @@ function ClienteFormFields({
             <fieldset className="space-y-3">
               <legend className={sectionTitleCls}>Identificación</legend>
               <div className="space-y-1">
-                <label className={labelCls}>Nombre completo <span className="text-destructive">*</span></label>
-                <input ref={firstInputRef} value={form.Nombre} onChange={setField("Nombre")} placeholder="Jane Smith" className={inp("Nombre")} />
+                <label className={labelCls}>Nombre completo <span className="text-destructive" aria-hidden="true">*</span></label>
+                <input ref={firstInputRef} value={form.Nombre} onChange={setField("Nombre")} placeholder="Ana García López" className={inp("Nombre")} aria-required="true" aria-invalid={!!fieldErrors.Nombre} />
                 <FieldError msg={fieldErrors.Nombre} />
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -523,8 +590,8 @@ function ClienteFormFields({
                 </div>
               </div>
               <div className="space-y-1">
-                <label className={labelCls}>Denominación fiscal (Fdenominacion)</label>
-                <input value={form.Fdenominacion} onChange={setField("Fdenominacion")} placeholder="Denominación fiscal" className={inp("Fdenominacion")} />
+                <label className={labelCls}>Denominación fiscal</label>
+                <input value={form.Fdenominacion} onChange={setField("Fdenominacion")} placeholder="Razón social o denominación fiscal" className={inp("Fdenominacion")} />
               </div>
             </fieldset>
 
@@ -533,17 +600,17 @@ function ClienteFormFields({
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className={labelCls}>Coeficiente</label>
-                  <input value={form.Coeficiente} onChange={setField("Coeficiente")} type="number" step="0.0001" placeholder="0.0000" className={inp("Coeficiente")} />
+                  <input value={form.Coeficiente} onChange={setField("Coeficiente")} type="number" step="0.0001" placeholder="0,0000" className={inp("Coeficiente")} />
                 </div>
                 <div className="space-y-1">
-                  <label className={labelCls}>Cuenta bancaria</label>
+                  <label className={labelCls}>Cuenta bancaria (IBAN)</label>
                   <div className="relative">
                     <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-                    <input value={form.Cuenta} onChange={setField("Cuenta")} placeholder="ES00 0000 0000" className={inpIcon("Cuenta")} />
+                    <input value={form.Cuenta} onChange={setField("Cuenta")} placeholder="ES00 0000 0000 00 0000000000" className={inpIcon("Cuenta")} />
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <label className={labelCls}>NEMP</label>
+                  <label className={labelCls}>Nº empleado (NEMP)</label>
                   <input value={form.NEMP} onChange={setField("NEMP")} placeholder="Nº empleado" className={inp("NEMP")} />
                 </div>
                 <div className="space-y-1">
@@ -565,7 +632,7 @@ function ClienteFormFields({
               <div className="space-y-1">
                 <div className="relative">
                   <StickyNote className="absolute left-3 top-3 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-                  <textarea value={form.Notas} onChange={setField("Notas")} placeholder="Notas relevantes…" rows={3} maxLength={4000}
+                  <textarea value={form.Notas} onChange={setField("Notas")} placeholder="Notas relevantes sobre este contacto…" rows={3} maxLength={4000}
                     className="w-full pl-9 pr-3 py-2.5 rounded-md border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring resize-none transition-shadow" />
                 </div>
                 <div className="text-xs text-muted-foreground text-right">{form.Notas.length}/4000</div>
@@ -584,7 +651,7 @@ function ClienteFormFields({
                 <label className={labelCls}>Móvil <span className="text-[10px] text-primary font-medium">(WhatsApp)</span></label>
                 <div className="relative">
                   <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-                  <input value={form.Movil} onChange={setField("Movil")} placeholder="+34611123456" className={`${inpIcon("Movil")} font-mono`} />
+                  <input value={form.Movil} onChange={setField("Movil")} placeholder="+34611123456" className={`${inpIcon("Movil")} font-mono`} inputMode="tel" aria-invalid={!!fieldErrors.Movil} />
                 </div>
                 <FieldError msg={fieldErrors.Movil} />
               </div>
@@ -593,16 +660,16 @@ function ClienteFormFields({
                 <label className={labelCls}>Teléfono fijo</label>
                 <div className="relative">
                   <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-                  <input value={form.TelefonoFijo} onChange={setField("TelefonoFijo")} placeholder="+34911123456" className={`${inpIcon("TelefonoFijo")} font-mono`} />
+                  <input value={form.TelefonoFijo} onChange={setField("TelefonoFijo")} placeholder="+34911123456" className={`${inpIcon("TelefonoFijo")} font-mono`} inputMode="tel" aria-invalid={!!fieldErrors.TelefonoFijo} />
                 </div>
                 <FieldError msg={fieldErrors.TelefonoFijo} />
               </div>
 
               <div className="space-y-1">
-                <label className={labelCls}>Email</label>
+                <label className={labelCls}>Correo electrónico</label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-                  <input value={form.Email} onChange={setField("Email")} type="email" placeholder="jane@example.com" className={inpIcon("Email")} />
+                  <input value={form.Email} onChange={setField("Email")} type="email" placeholder="ana@ejemplo.es" className={inpIcon("Email")} aria-invalid={!!fieldErrors.Email} />
                 </div>
                 <FieldError msg={fieldErrors.Email} />
               </div>
@@ -611,24 +678,24 @@ function ClienteFormFields({
                 <label className={labelCls}>Fax</label>
                 <div className="relative">
                   <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-                  <input value={form.Fax} onChange={setField("Fax")} placeholder="+34911000000" className={`${inpIcon("Fax")} font-mono`} />
+                  <input value={form.Fax} onChange={setField("Fax")} placeholder="+34911000000" className={`${inpIcon("Fax")} font-mono`} inputMode="tel" aria-invalid={!!fieldErrors.Fax} />
                 </div>
                 <FieldError msg={fieldErrors.Fax} />
               </div>
             </div>
 
             <div className="space-y-1">
-              <label className={labelCls}>Web</label>
+              <label className={labelCls}>Sitio web</label>
               <div className="relative">
                 <Globe className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-                <input value={form.Web} onChange={setField("Web")} placeholder="https://www.example.com" className={inpIcon("Web")} />
+                <input value={form.Web} onChange={setField("Web")} placeholder="https://www.ejemplo.es" className={inpIcon("Web")} inputMode="url" />
               </div>
             </div>
 
             <div className="flex items-start gap-2 rounded-md border border-border bg-muted/40 px-3 py-2.5">
               <Info className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
               <p className="text-xs text-muted-foreground">
-                Los teléfonos deben usar formato internacional E.164.<br />
+                Los teléfonos deben incluir el prefijo internacional (formato E.164).<br />
                 <span className="font-medium text-foreground">Ejemplo:</span> <code className="font-mono text-primary">+34611123456</code>
               </p>
             </div>
@@ -644,13 +711,13 @@ function ClienteFormFields({
                 <label className={labelCls}>Dirección</label>
                 <div className="relative">
                   <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-                  <input value={form.Direccion} onChange={setField("Direccion")} placeholder="Calle Mayor, 12, 3B" className={inpIcon("Direccion")} />
+                  <input value={form.Direccion} onChange={setField("Direccion")} placeholder="Calle Mayor, 12, 3.º B" className={inpIcon("Direccion")} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className={labelCls}>Código postal</label>
-                  <input value={form.Cpostal} onChange={setField("Cpostal")} placeholder="28001" className={inp("Cpostal")} />
+                  <input value={form.Cpostal} onChange={setField("Cpostal")} placeholder="28001" className={inp("Cpostal")} inputMode="numeric" maxLength={10} />
                 </div>
                 <div className="space-y-1">
                   <label className={labelCls}>Bloque</label>
@@ -661,7 +728,7 @@ function ClienteFormFields({
                   <input value={form.coddistri} onChange={setField("coddistri")} placeholder="D01" className={inp("coddistri")} />
                 </div>
                 <div className="space-y-1">
-                  <label className={labelCls}>Nom. distribución</label>
+                  <label className={labelCls}>Nombre distribución</label>
                   <input value={form.Nomdistri} onChange={setField("Nomdistri")} placeholder="Zona Norte" className={inp("Nomdistri")} />
                 </div>
               </div>
@@ -671,15 +738,15 @@ function ClienteFormFields({
               <legend className={sectionTitleCls}>Datos del bajo</legend>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1 col-span-2">
-                  <label className={labelCls}>Nombre bajo</label>
-                  <input value={form.BajoNombre} onChange={setField("BajoNombre")} placeholder="Nombre del bajo" className={inp("BajoNombre")} />
+                  <label className={labelCls}>Nombre (bajo)</label>
+                  <input value={form.BajoNombre} onChange={setField("BajoNombre")} placeholder="Nombre del propietario del bajo" className={inp("BajoNombre")} />
                 </div>
                 <div className="space-y-1">
-                  <label className={labelCls}>NIF bajo</label>
+                  <label className={labelCls}>NIF (bajo)</label>
                   <input value={form.BajoNIF} onChange={setField("BajoNIF")} placeholder="NIF del bajo" className={inp("BajoNIF")} />
                 </div>
                 <div className="space-y-1 col-span-2">
-                  <label className={labelCls}>Fdenominación bajo</label>
+                  <label className={labelCls}>Denominación fiscal (bajo)</label>
                   <input value={form.BajoFdenominacion} onChange={setField("BajoFdenominacion")} placeholder="Denominación fiscal del bajo" className={inp("BajoFdenominacion")} />
                 </div>
               </div>
@@ -690,8 +757,8 @@ function ClienteFormFields({
         {/* ── AVANZADO ──────────────────────────────────────────────────────── */}
         {activeTab === "avanzado" && (
           <fieldset className="space-y-3">
-            <legend className={sectionTitleCls}>Campos avanzados</legend>
-            <p className="text-xs text-muted-foreground">Campos técnicos o de integración con sistemas externos.</p>
+            <legend className={sectionTitleCls}>Campos de integración</legend>
+            <p className="text-xs text-muted-foreground">Campos técnicos para la integración con sistemas externos.</p>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <label className={labelCls}>Código</label>
@@ -769,7 +836,7 @@ function ClienteSheet({
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["contacts"] });
       qc.invalidateQueries({ queryKey: ["stats"] });
-      toast.success(isEdit ? "Contacto actualizado" : "Contacto añadido");
+      toast.success(isEdit ? "Contacto actualizado correctamente" : "Contacto añadido correctamente");
       onClose();
     },
     onError: (e: Error) => setSubmitError(e.message),
@@ -782,7 +849,7 @@ function ClienteSheet({
       const firstIssue = parsed.error.issues[0];
       const fieldName = firstIssue.path[0] as keyof typeof EMPTY_FORM;
       setFieldErrors((prev) => ({ ...prev, [fieldName]: firstIssue.message }));
-      setSubmitError(firstIssue.message);
+      setSubmitError("Corrige los errores marcados antes de guardar.");
       return;
     }
     setSubmitError(null);
@@ -813,13 +880,13 @@ function ClienteSheet({
               }
             </div>
           </div>
-          <button onClick={onClose} aria-label="Cerrar" className="grid place-items-center h-9 w-9 rounded-md hover:bg-accent transition-colors">
+          <button onClick={onClose} aria-label="Cerrar sin guardar" className="grid place-items-center h-9 w-9 rounded-md hover:bg-accent transition-colors">
             <X className="h-4 w-4" />
           </button>
         </div>
 
         {/* Body */}
-        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0" noValidate>
           <div className="flex-1 min-h-0 flex flex-col">
             <ClienteFormFields
               form={form}
@@ -833,7 +900,7 @@ function ClienteSheet({
           {/* Sticky footer */}
           <div className="shrink-0 border-t border-border px-5 py-4 bg-background/95 backdrop-blur space-y-2.5">
             {(submitError || hasFieldErrors) && (
-              <div className="flex items-center gap-2 rounded-md bg-destructive/10 border border-destructive/20 px-3 py-2">
+              <div className="flex items-center gap-2 rounded-md bg-destructive/10 border border-destructive/20 px-3 py-2" role="alert">
                 <AlertCircle className="h-3.5 w-3.5 text-destructive shrink-0" />
                 <p className="text-xs text-destructive">{submitError ?? "Corrige los errores marcados antes de guardar."}</p>
               </div>
@@ -854,7 +921,9 @@ function ClienteSheet({
                   : <><Check className="h-4 w-4" /> {isEdit ? "Guardar cambios" : "Añadir contacto"}</>}
               </button>
             </div>
-            <p className="text-[11px] text-muted-foreground text-center">Pulsa <kbd className="font-mono bg-muted px-1 rounded">Esc</kbd> para cerrar sin guardar</p>
+            <p className="text-[11px] text-muted-foreground text-center">
+              Pulsa <kbd className="font-mono bg-muted px-1 rounded text-[10px]">Esc</kbd> para cerrar sin guardar
+            </p>
           </div>
         </form>
       </div>
@@ -927,7 +996,7 @@ function ClienteDetailDrawer({
             <div className="grid place-items-center h-14 w-14 rounded-full bg-primary/10 text-primary text-xl font-bold select-none">
               {initials}
             </div>
-            <button onClick={onClose} aria-label="Cerrar" className="grid place-items-center h-8 w-8 rounded-md hover:bg-accent transition-colors -mr-1">
+            <button onClick={onClose} aria-label="Cerrar detalle" className="grid place-items-center h-8 w-8 rounded-md hover:bg-accent transition-colors -mr-1">
               <X className="h-4 w-4" />
             </button>
           </div>
@@ -972,6 +1041,7 @@ function ClienteDetailDrawer({
               onClick={onDelete}
               className="h-9 w-9 rounded-md border border-border text-muted-foreground hover:bg-destructive/10 hover:text-destructive inline-flex items-center justify-center transition-colors"
               aria-label="Eliminar contacto"
+              title="Eliminar contacto"
             >
               <Trash2 className="h-3.5 w-3.5" />
             </button>
@@ -981,19 +1051,19 @@ function ClienteDetailDrawer({
         {/* Scrollable detail body */}
         <div className="flex-1 overflow-y-auto px-5 py-3 space-y-1">
 
-          {/* Contact */}
+          {/* Contacto */}
           {hasContact && (
             <section>
               <p className={sectionTitleCls}><Phone className="h-3.5 w-3.5" /> Contacto</p>
               <DetailRow icon={Phone} label="Móvil (WhatsApp)" value={cliente.Movil} mono href={`https://wa.me/${cliente.Movil?.replace("+", "")}`} />
               <DetailRow icon={Phone} label="Teléfono fijo" value={cliente.TelefonoFijo} mono />
-              <DetailRow icon={Mail} label="Email" value={cliente.Email} href={`mailto:${cliente.Email}`} />
+              <DetailRow icon={Mail} label="Correo electrónico" value={cliente.Email} href={`mailto:${cliente.Email}`} />
               <DetailRow icon={Phone} label="Fax" value={cliente.Fax} mono />
-              <DetailRow icon={Globe} label="Web" value={cliente.Web} href={cliente.Web ?? undefined} />
+              <DetailRow icon={Globe} label="Sitio web" value={cliente.Web} href={cliente.Web ?? undefined} />
             </section>
           )}
 
-          {/* Address */}
+          {/* Dirección */}
           {(cliente.Direccion || cliente.Cpostal || cliente.bloque || cliente.coddistri) && (
             <section>
               <p className={sectionTitleCls}><Home className="h-3.5 w-3.5" /> Dirección</p>
@@ -1001,18 +1071,18 @@ function ClienteDetailDrawer({
               <DetailRow icon={MapPin} label="Código postal" value={cliente.Cpostal} />
               <DetailRow icon={Building2} label="Bloque" value={cliente.bloque} />
               <DetailRow icon={Hash} label="Cód. distribución" value={cliente.coddistri} />
-              <DetailRow icon={Hash} label="Nom. distribución" value={cliente.Nomdistri} />
+              <DetailRow icon={Hash} label="Nombre distribución" value={cliente.Nomdistri} />
             </section>
           )}
 
-          {/* Economic */}
+          {/* Económico */}
           {(cliente.Coeficiente != null || cliente.Cuenta || cliente.pagadores || cliente.NEMP) && (
             <section>
               <p className={sectionTitleCls}><Banknote className="h-3.5 w-3.5" /> Económico</p>
               <DetailRow icon={Hash} label="Coeficiente" value={cliente.Coeficiente} />
               <DetailRow icon={CreditCard} label="Cuenta bancaria" value={cliente.Cuenta} mono />
               <DetailRow icon={Users} label="Pagadores" value={cliente.pagadores} />
-              <DetailRow icon={Hash} label="NEMP" value={cliente.NEMP} />
+              <DetailRow icon={Hash} label="Nº empleado (NEMP)" value={cliente.NEMP} />
             </section>
           )}
 
@@ -1030,13 +1100,13 @@ function ClienteDetailDrawer({
           {(cliente.BajoNombre || cliente.BajoNIF || cliente.BajoFdenominacion) && (
             <section>
               <p className={sectionTitleCls}><Building2 className="h-3.5 w-3.5" /> Bajo</p>
-              <DetailRow icon={UserPlus} label="Nombre bajo" value={cliente.BajoNombre} />
-              <DetailRow icon={BadgeCheck} label="NIF bajo" value={cliente.BajoNIF} mono />
-              <DetailRow icon={FileText} label="Fdenominación bajo" value={cliente.BajoFdenominacion} />
+              <DetailRow icon={UserPlus} label="Nombre (bajo)" value={cliente.BajoNombre} />
+              <DetailRow icon={BadgeCheck} label="NIF (bajo)" value={cliente.BajoNIF} mono />
+              <DetailRow icon={FileText} label="Denominación fiscal (bajo)" value={cliente.BajoFdenominacion} />
             </section>
           )}
 
-          {/* Notes */}
+          {/* Notas */}
           {cliente.Notas && (
             <section>
               <p className={sectionTitleCls}><StickyNote className="h-3.5 w-3.5" /> Notas</p>
@@ -1044,16 +1114,16 @@ function ClienteDetailDrawer({
             </section>
           )}
 
-          {/* Dates */}
+          {/* Fechas */}
           <section>
             <p className={sectionTitleCls}><Calendar className="h-3.5 w-3.5" /> Fechas</p>
             <DetailRow icon={Calendar} label="Fecha de baja" value={cliente.fecha_baja} />
-            <DetailRow icon={Calendar} label="Creado" value={new Date(cliente.created_at).toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" })} />
+            <DetailRow icon={Calendar} label="Creado" value={new Date(cliente.created_at).toLocaleDateString("es-ES", { day: "2-digit", month: "long", year: "numeric" })} />
           </section>
         </div>
 
         <p className="shrink-0 text-center text-[11px] text-muted-foreground py-2 border-t border-border">
-          Pulsa <kbd className="font-mono bg-muted px-1 rounded">Esc</kbd> para cerrar
+          Pulsa <kbd className="font-mono bg-muted px-1 rounded text-[10px]">Esc</kbd> para cerrar
         </p>
       </div>
     </div>
@@ -1099,9 +1169,10 @@ function ContactRow({
           )}
         </div>
         <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground">
-          {cliente.Movil && <span className="flex items-center gap-1"><Phone className="h-3 w-3" />{cliente.Movil}</span>}
+          {cliente.Movil && <span className="flex items-center gap-1 font-mono"><Phone className="h-3 w-3" />{cliente.Movil}</span>}
           {cliente.Email && <span className="flex items-center gap-1 truncate"><Mail className="h-3 w-3" /><span className="truncate">{cliente.Email}</span></span>}
-          {!cliente.Movil && !cliente.Email && <span className="italic">Sin datos de contacto</span>}
+          {!cliente.Movil && !cliente.Email && cliente.TelefonoFijo && <span className="flex items-center gap-1 font-mono"><Phone className="h-3 w-3" />{cliente.TelefonoFijo}</span>}
+          {!cliente.Movil && !cliente.Email && !cliente.TelefonoFijo && <span className="italic">Sin datos de contacto</span>}
         </div>
       </div>
 
@@ -1122,7 +1193,7 @@ function ContactRow({
             onClick={onCompose}
             title="Enviar WhatsApp"
             className="grid place-items-center h-8 w-8 rounded-md hover:bg-green-100 hover:text-green-700 dark:hover:bg-green-900/30 dark:hover:text-green-400 text-muted-foreground transition-colors"
-            aria-label={`Enviar WhatsApp a ${cliente.Nombre}`}
+            aria-label={`Enviar WhatsApp a ${cliente.Nombre ?? "contacto"}`}
           >
             <Send className="h-3.5 w-3.5" />
           </button>
@@ -1131,7 +1202,7 @@ function ContactRow({
           onClick={onEdit}
           title="Editar"
           className="grid place-items-center h-8 w-8 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
-          aria-label={`Editar ${cliente.Nombre}`}
+          aria-label={`Editar ${cliente.Nombre ?? "contacto"}`}
         >
           <Pencil className="h-3.5 w-3.5" />
         </button>
@@ -1139,7 +1210,7 @@ function ContactRow({
           onClick={onDelete}
           title="Eliminar"
           className="grid place-items-center h-8 w-8 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
-          aria-label={`Eliminar ${cliente.Nombre}`}
+          aria-label={`Eliminar ${cliente.Nombre ?? "contacto"}`}
         >
           <Trash2 className="h-3.5 w-3.5" />
         </button>
@@ -1157,6 +1228,7 @@ function ContactsPage() {
   const [composeBulk, setComposeBulk] = useState<{ num: number; clientes: Cliente[] } | null>(null);
   const [clienteSheet, setClienteSheet] = useState<{ mode: "add" | "edit"; cliente?: Cliente } | null>(null);
   const [detailFor, setDetailFor] = useState<Cliente | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Cliente | null>(null);
 
   const [nameSearch, setNameSearch] = useState("");
   const [communityFilter, setCommunityFilter] = useState("");
@@ -1219,8 +1291,9 @@ function ContactsPage() {
       qc.invalidateQueries({ queryKey: ["stats"] });
       toast.success("Contacto eliminado");
       setDetailFor(null);
+      setDeleteTarget(null);
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => { toast.error(e.message); setDeleteTarget(null); },
   });
 
   const searchRef = useRef<HTMLInputElement>(null);
@@ -1236,9 +1309,8 @@ function ContactsPage() {
     return () => document.removeEventListener("keydown", onKey);
   }, []);
 
-  function handleDeleteCliente(c: Cliente) {
-    if (confirm(`¿Eliminar a "${c.Nombre ?? "este contacto"}"? Esta acción no se puede deshacer.`))
-      deleteCliente.mutate(c.id);
+  function handleDeleteRequest(c: Cliente) {
+    setDeleteTarget(c);
   }
 
   return (
@@ -1273,7 +1345,8 @@ function ContactsPage() {
                 ref={searchRef}
                 type="text" value={nameSearch}
                 onChange={(e) => setNameSearch(e.target.value)}
-                placeholder="Buscar por nombre, NIF, teléfono, email… (/)"
+                placeholder="Buscar por nombre, NIF, teléfono, correo… (/)"
+                aria-label="Buscar contactos"
                 className="w-full h-9 pl-9 pr-3 rounded-md border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring"
               />
               {nameSearch && (
@@ -1283,16 +1356,16 @@ function ContactsPage() {
               )}
             </div>
             <div className="sm:w-52">
-              <NumComunidadCombobox options={communityNumbers} value={communityFilter} onChange={setCommunityFilter} placeholder="Filtrar comunidad…" />
+              <NumComunidadCombobox options={communityNumbers} value={communityFilter} onChange={setCommunityFilter} placeholder="Filtrar por comunidad…" />
             </div>
             {communityFilter && (
-              <button onClick={() => setCommunityFilter("")} className="h-9 px-3 rounded-md border border-border text-xs text-muted-foreground hover:bg-accent flex items-center gap-1 shrink-0">
-                <X className="h-3.5 w-3.5" /> Limpiar
+              <button onClick={() => setCommunityFilter("")} className="h-9 px-3 rounded-md border border-border text-xs text-muted-foreground hover:bg-accent flex items-center gap-1 shrink-0" aria-label="Quitar filtro de comunidad">
+                <X className="h-3.5 w-3.5" /> Quitar filtro
               </button>
             )}
           </div>
           {(nameSearch || communityFilter) && (
-            <p className="text-xs text-muted-foreground mt-2">
+            <p className="text-xs text-muted-foreground mt-2" aria-live="polite">
               {filteredData.length} resultado{filteredData.length !== 1 ? "s" : ""} de {data?.length ?? 0}
             </p>
           )}
@@ -1309,13 +1382,13 @@ function ContactsPage() {
             </div>
             <p className="text-sm font-medium text-destructive">Error al cargar los contactos</p>
             <p className="text-xs text-muted-foreground mt-2 mb-4">
-              {error instanceof Error ? error.message : "Ha ocurrido un error."}
+              {error instanceof Error ? error.message : "Ha ocurrido un error inesperado."}
             </p>
             <button
               onClick={() => qc.invalidateQueries({ queryKey: ["contacts"] })}
               className="inline-flex items-center gap-2 h-9 px-3 rounded-md border border-border text-sm hover:bg-accent"
             >
-              Reintentar
+              <RefreshCw className="h-3.5 w-3.5" /> Reintentar
             </button>
           </div>
         ) : filteredData.length === 0 ? (
@@ -1323,11 +1396,11 @@ function ContactsPage() {
             <div className="mx-auto grid place-items-center h-12 w-12 rounded-full bg-muted text-muted-foreground mb-3">
               <UsersRound className="h-6 w-6" />
             </div>
-            <p className="text-sm font-medium">{nameSearch || communityFilter ? "Sin resultados" : "No hay contactos"}</p>
+            <p className="text-sm font-medium">{nameSearch || communityFilter ? "Sin resultados" : "Aún no hay contactos"}</p>
             <p className="text-xs text-muted-foreground mt-1 mb-4">
               {nameSearch || communityFilter
                 ? "Prueba con otros términos de búsqueda."
-                : "Añade tu primer contacto con el botón de arriba."}
+                : "Añade el primer contacto con el botón de arriba."}
             </p>
             {!nameSearch && !communityFilter && (
               <button
@@ -1348,6 +1421,7 @@ function ContactsPage() {
                   <button
                     type="button"
                     onClick={() => toggleGroup(key)}
+                    aria-expanded={!isCollapsed}
                     className="w-full flex items-center justify-between px-4 py-2 bg-muted/30 hover:bg-muted/60 transition-colors text-xs font-semibold text-muted-foreground"
                   >
                     <span className="flex items-center gap-2">
@@ -1377,7 +1451,7 @@ function ContactsPage() {
                           cliente={c}
                           onView={() => setDetailFor(c)}
                           onEdit={() => setClienteSheet({ mode: "edit", cliente: c })}
-                          onDelete={() => handleDeleteCliente(c)}
+                          onDelete={() => handleDeleteRequest(c)}
                           onCompose={() => setComposeFor(c)}
                         />
                       ))}
@@ -1390,6 +1464,16 @@ function ContactsPage() {
         )}
       </div>
 
+      {/* ── Delete confirmation dialog ── */}
+      {deleteTarget && (
+        <DeleteConfirmDialog
+          nombre={deleteTarget.Nombre ?? "este contacto"}
+          isPending={deleteCliente.isPending}
+          onConfirm={() => deleteCliente.mutate(deleteTarget.id)}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
+
       {/* ── Detail drawer ── */}
       {detailFor && (
         <ClienteDetailDrawer
@@ -1397,7 +1481,7 @@ function ContactsPage() {
           onClose={() => setDetailFor(null)}
           onEdit={() => { setClienteSheet({ mode: "edit", cliente: detailFor }); setDetailFor(null); }}
           onCompose={() => { setComposeFor(detailFor); setDetailFor(null); }}
-          onDelete={() => handleDeleteCliente(detailFor)}
+          onDelete={() => { handleDeleteRequest(detailFor); setDetailFor(null); }}
         />
       )}
 
@@ -1435,211 +1519,4 @@ function ComposeModal({ cliente, onClose }: { cliente: Cliente; onClose: () => v
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) { if (e.key === "Escape") onClose(); }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  useEffect(() => { textareaRef.current?.focus(); }, []);
-
-  async function handleSend() {
-    if (!message.trim() && !file) { toast.error("Escribe un mensaje o adjunta un archivo"); return; }
-    setIsSending(true);
-    try {
-      let mediaData: { base64: string; mimeType: string; fileName: string } | undefined;
-      if (file) {
-        const buf = await file.arrayBuffer();
-        const bytes = new Uint8Array(buf);
-        let bin = "";
-        for (const b of bytes) bin += String.fromCharCode(b);
-        mediaData = { base64: btoa(bin), mimeType: file.type, fileName: file.name };
-      }
-      await sendFn({ data: { to: cliente.Movil!, message: message.trim(), media: mediaData } });
-      toast.success(`Mensaje enviado a ${cliente.Nombre ?? cliente.Movil}`);
-      onClose();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error al enviar el mensaje");
-    } finally {
-      setIsSending(false);
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" role="dialog" aria-modal="true">
-      <div className="absolute inset-0 bg-foreground/30 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-lg bg-background rounded-t-2xl sm:rounded-2xl border border-border shadow-2xl flex flex-col max-h-[90vh] animate-in slide-in-from-bottom sm:fade-in duration-200">
-        {showTemplates ? (
-          <div className="flex-1 overflow-hidden">
-            <TemplatePicker onSelect={(cuerpo) => { setMessage(cuerpo); setShowTemplates(false); setTimeout(() => textareaRef.current?.focus(), 50); }} onClose={() => setShowTemplates(false)} />
-          </div>
-        ) : (
-          <>
-            <div className="flex items-center justify-between px-5 h-14 border-b border-border shrink-0">
-              <div className="flex items-center gap-2.5">
-                <div className="grid place-items-center h-7 w-7 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                  <Send className="h-3.5 w-3.5" />
-                </div>
-                <div>
-                  <p className="font-semibold text-sm">{cliente.Nombre ?? cliente.Movil}</p>
-                  {cliente.Nombre && <p className="text-xs text-muted-foreground font-mono">{cliente.Movil}</p>}
-                </div>
-              </div>
-              <button onClick={onClose} aria-label="Cerrar" className="grid place-items-center h-8 w-8 rounded-md hover:bg-accent"><X className="h-4 w-4" /></button>
-            </div>
-            <div className="p-5 space-y-4 flex-1 overflow-y-auto">
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-sm font-medium">Mensaje</label>
-                  <button type="button" onClick={() => setShowTemplates(true)} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
-                    <BookTemplate className="h-3.5 w-3.5" /> Usar plantilla
-                  </button>
-                </div>
-                <textarea
-                  ref={textareaRef}
-                  value={message} onChange={(e) => setMessage(e.target.value)}
-                  onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); handleSend(); } }}
-                  rows={5} maxLength={4096} placeholder="Escribe tu mensaje…"
-                  className="w-full rounded-md border border-input bg-background p-3 text-sm outline-none focus:ring-2 focus:ring-ring resize-none"
-                />
-                <div className="flex justify-between items-center">
-                  <p className="text-xs text-muted-foreground">⌘/Ctrl+Enter para enviar</p>
-                  <p className="text-xs text-muted-foreground">{message.length}/4096</p>
-                </div>
-              </div>
-              <AttachmentPicker file={file} onChange={setFile} />
-            </div>
-            <div className="px-5 py-4 border-t border-border shrink-0 flex gap-2">
-              <button type="button" onClick={onClose} className="flex-1 h-10 rounded-md border border-border text-sm font-medium hover:bg-accent transition-colors">Cancelar</button>
-              <button
-                type="button" onClick={handleSend} disabled={isSending}
-                className="flex-1 h-10 rounded-md bg-green-600 text-white text-sm font-medium hover:bg-green-700 disabled:opacity-60 inline-flex items-center justify-center gap-2 transition-colors"
-              >
-                {isSending ? <><Loader2 className="h-4 w-4 animate-spin" /> Enviando…</> : <><Send className="h-4 w-4" /> Enviar</>}
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ─── Bulk compose modal ───────────────────────────────────────────────────────
-function BulkComposeModal({ num, clientes, onClose }: { num: number; clientes: Cliente[]; onClose: () => void }) {
-  const sendFn = useServerFn(sendWhatsAppMessage);
-  const eligible = clientes.filter((c) => !!c.Movil);
-  const [message, setMessage] = useState("");
-  const [file, setFile] = useState<File | null>(null);
-  const [showTemplates, setShowTemplates] = useState(false);
-  const [progress, setProgress] = useState<{ sent: number; failed: number; total: number } | null>(null);
-  const [isSending, setIsSending] = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) { if (e.key === "Escape" && !isSending) onClose(); }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose, isSending]);
-
-  useEffect(() => { textareaRef.current?.focus(); }, []);
-
-  async function handleBulkSend() {
-    if (!message.trim() && !file) { toast.error("Escribe un mensaje o adjunta un archivo"); return; }
-    if (!confirm(`¿Enviar a ${eligible.length} contacto${eligible.length !== 1 ? "s" : ""} de la Comunidad ${num}?`)) return;
-    setIsSending(true);
-    setProgress({ sent: 0, failed: 0, total: eligible.length });
-    let sent = 0; let failed = 0;
-    let mediaData: { base64: string; mimeType: string; fileName: string } | undefined;
-    if (file) {
-      const buf = await file.arrayBuffer();
-      const bytes = new Uint8Array(buf);
-      let bin = ""; for (const b of bytes) bin += String.fromCharCode(b);
-      mediaData = { base64: btoa(bin), mimeType: file.type, fileName: file.name };
-    }
-    for (const c of eligible) {
-      try {
-        await sendFn({ data: { to: c.Movil!, message: message.trim(), media: mediaData } });
-        sent++;
-      } catch { failed++; }
-      setProgress({ sent, failed, total: eligible.length });
-      await new Promise((r) => setTimeout(r, 300));
-    }
-    setIsSending(false);
-    toast.success(`Envío completado: ${sent} enviado${sent !== 1 ? "s" : ""}, ${failed} fallido${failed !== 1 ? "s" : ""}`);
-    onClose();
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" role="dialog" aria-modal="true">
-      <div className="absolute inset-0 bg-foreground/30 backdrop-blur-sm" onClick={!isSending ? onClose : undefined} />
-      <div className="relative w-full max-w-lg bg-background rounded-t-2xl sm:rounded-2xl border border-border shadow-2xl flex flex-col max-h-[90vh] animate-in slide-in-from-bottom sm:fade-in duration-200">
-        {showTemplates ? (
-          <div className="flex-1 overflow-hidden">
-            <TemplatePicker onSelect={(cuerpo) => { setMessage(cuerpo); setShowTemplates(false); setTimeout(() => textareaRef.current?.focus(), 50); }} onClose={() => setShowTemplates(false)} />
-          </div>
-        ) : (
-          <>
-            <div className="flex items-center justify-between px-5 h-14 border-b border-border shrink-0">
-              <div className="flex items-center gap-2.5">
-                <div className="grid place-items-center h-7 w-7 rounded-full bg-primary/10 text-primary">
-                  <Users className="h-3.5 w-3.5" />
-                </div>
-                <div>
-                  <p className="font-semibold text-sm">Comunidad {num}</p>
-                  <p className="text-xs text-muted-foreground">{eligible.length} de {clientes.length} tienen móvil</p>
-                </div>
-              </div>
-              {!isSending && <button onClick={onClose} aria-label="Cerrar" className="grid place-items-center h-8 w-8 rounded-md hover:bg-accent"><X className="h-4 w-4" /></button>}
-            </div>
-            <div className="p-5 space-y-4 flex-1 overflow-y-auto">
-              {eligible.length === 0 && (
-                <div className="rounded-md border border-amber-200 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-900/20 p-3 text-sm text-amber-800 dark:text-amber-300 flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4 shrink-0" />
-                  Ningún contacto de esta comunidad tiene número de móvil registrado.
-                </div>
-              )}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-sm font-medium">Mensaje</label>
-                  <button type="button" onClick={() => setShowTemplates(true)} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
-                    <BookTemplate className="h-3.5 w-3.5" /> Usar plantilla
-                  </button>
-                </div>
-                <textarea
-                  ref={textareaRef}
-                  value={message} onChange={(e) => setMessage(e.target.value)}
-                  rows={5} maxLength={4096} placeholder="Escribe tu mensaje…"
-                  className="w-full rounded-md border border-input bg-background p-3 text-sm outline-none focus:ring-2 focus:ring-ring resize-none"
-                />
-                <div className="text-right text-xs text-muted-foreground">{message.length}/4096</div>
-              </div>
-              <AttachmentPicker file={file} onChange={setFile} />
-              {progress && (
-                <div className="space-y-1.5">
-                  <div className="h-2 rounded-full bg-muted overflow-hidden">
-                    <div
-                      className="h-full bg-primary transition-all duration-300"
-                      style={{ width: `${((progress.sent + progress.failed) / progress.total) * 100}%` }}
-                    />
-                  </div>
-                  <p className="text-xs text-muted-foreground text-center">
-                    {progress.sent + progress.failed} / {progress.total} · {progress.sent} ✓ · {progress.failed} ✗
-                  </p>
-                </div>
-              )}
-            </div>
-            <div className="px-5 py-4 border-t border-border shrink-0 flex gap-2">
-              <button type="button" onClick={onClose} disabled={isSending} className="flex-1 h-10 rounded-md border border-border text-sm font-medium hover:bg-accent disabled:opacity-50 transition-colors">Cancelar</button>
-              <button
-                type="button" onClick={handleBulkSend}
-                disabled={isSending || eligible.length === 0}
-                className="flex-1 h-10 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-60 inline-flex items-center justify-center gap-2 transition-colors"
-              >
-                {isSending ? <><Loader2 className="h-4 w-4 animate-spin" /> Enviando…</> : <><Send className="h-4 w-4" /> Enviar a {eligible.length}</>}
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
+  
