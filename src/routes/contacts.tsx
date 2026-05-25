@@ -27,6 +27,11 @@ import {
   Pencil,
   Check,
   UserPlus,
+  ChevronsUpDown,
+  Hash,
+  Calendar,
+  CreditCard,
+  Info,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/Skeleton";
@@ -197,23 +202,29 @@ async function fetchPlantillas(): Promise<Plantilla[]> {
   return (data ?? []) as Plantilla[];
 }
 
-// ─── Shared input / textarea class helpers ───────────────────────────────────
-const inputCls = "w-full h-10 px-3 rounded-md border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring";
-const inputIconCls = "w-full h-10 pl-9 pr-3 rounded-md border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring";
+// ─── Shared style helpers ─────────────────────────────────────────────────────
+const inputCls = "w-full h-10 px-3 rounded-md border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring transition-shadow";
+const inputInvalidCls = "w-full h-10 px-3 rounded-md border border-destructive bg-background text-sm outline-none focus:ring-2 focus:ring-destructive/40 transition-shadow";
+const inputIconCls = "w-full h-10 pl-9 pr-3 rounded-md border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring transition-shadow";
+const inputIconInvalidCls = "w-full h-10 pl-9 pr-3 rounded-md border border-destructive bg-background text-sm outline-none focus:ring-2 focus:ring-destructive/40 transition-shadow";
 const labelCls = "text-xs font-medium text-muted-foreground";
-const fieldsetLegendCls = "text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-2 after:content-[''] after:flex-1 after:h-px after:bg-border";
+const sectionTitleCls = "text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-3 flex items-center gap-2 after:content-[''] after:flex-1 after:h-px after:bg-border";
 
-// ─── NumComunidad combobox ───────────────────────────────────────────────────
+// ─── Inline field error helper ────────────────────────────────────────────────
+function FieldError({ msg }: { msg?: string }) {
+  if (!msg) return null;
+  return (
+    <p className="flex items-center gap-1 text-[11px] text-destructive mt-0.5">
+      <AlertCircle className="h-3 w-3 shrink-0" />{msg}
+    </p>
+  );
+}
+
+// ─── NumComunidad combobox ────────────────────────────────────────────────────
 function NumComunidadCombobox({
-  options,
-  value,
-  onChange,
-  placeholder = "Buscar o escribir nº comunidad…",
+  options, value, onChange, placeholder = "Buscar o escribir nº comunidad…",
 }: {
-  options: number[];
-  value: string;
-  onChange: (v: string) => void;
-  placeholder?: string;
+  options: number[]; value: string; onChange: (v: string) => void; placeholder?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState(value);
@@ -236,32 +247,22 @@ function NumComunidadCombobox({
 
   return (
     <div ref={ref} className="relative">
-      <input
-        type="text"
-        inputMode="numeric"
-        value={query}
-        placeholder={placeholder}
-        className={inputCls}
-        onFocus={() => setOpen(true)}
-        onChange={(e) => {
-          setQuery(e.target.value);
-          onChange(e.target.value);
-          setOpen(true);
-        }}
-      />
+      <div className="relative">
+        <Hash className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+        <input
+          type="text" inputMode="numeric" value={query} placeholder={placeholder}
+          className={inputIconCls}
+          onFocus={() => setOpen(true)}
+          onChange={(e) => { setQuery(e.target.value); onChange(e.target.value); setOpen(true); }}
+        />
+        <ChevronsUpDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+      </div>
       {open && filtered.length > 0 && (
         <ul className="absolute z-50 mt-1 w-full max-h-48 overflow-y-auto rounded-md border border-border bg-popover shadow-lg text-sm">
           {filtered.map((n) => (
-            <li
-              key={n}
-              className="px-3 py-2 cursor-pointer hover:bg-accent"
-              onMouseDown={() => {
-                onChange(String(n));
-                setQuery(String(n));
-                setOpen(false);
-              }}
-            >
-              Comunidad {n}
+            <li key={n} className="px-3 py-2 cursor-pointer hover:bg-accent flex items-center gap-2"
+              onMouseDown={() => { onChange(String(n)); setQuery(String(n)); setOpen(false); }}>
+              <Hash className="h-3 w-3 text-muted-foreground" /> Comunidad {n}
             </li>
           ))}
         </ul>
@@ -270,20 +271,10 @@ function NumComunidadCombobox({
   );
 }
 
-// ─── Template picker panel ───────────────────────────────────────────────────
-function TemplatePicker({
-  onSelect,
-  onClose,
-}: {
-  onSelect: (cuerpo: string) => void;
-  onClose: () => void;
-}) {
+// ─── Template picker panel ────────────────────────────────────────────────────
+function TemplatePicker({ onSelect, onClose }: { onSelect: (cuerpo: string) => void; onClose: () => void }) {
   const qc = useQueryClient();
-  const { data: plantillas = [], isLoading } = useQuery({
-    queryKey: ["plantillas"],
-    queryFn: fetchPlantillas,
-  });
-
+  const { data: plantillas = [], isLoading } = useQuery({ queryKey: ["plantillas"], queryFn: fetchPlantillas });
   const [editing, setEditing] = useState<Plantilla | null>(null);
   const [creating, setCreating] = useState(false);
   const [editNombre, setEditNombre] = useState("");
@@ -291,20 +282,13 @@ function TemplatePicker({
   const [editDescripcion, setEditDescripcion] = useState("");
   const [editError, setEditError] = useState<string | null>(null);
 
-  function startEdit(p: Plantilla) {
-    setEditing(p); setEditNombre(p.nombre); setEditCuerpo(p.cuerpo);
-    setEditDescripcion(p.descripcion ?? ""); setEditError(null); setCreating(false);
-  }
-  function startCreate() {
-    setCreating(true); setEditing(null); setEditNombre(""); setEditCuerpo("");
-    setEditDescripcion(""); setEditError(null);
-  }
+  function startEdit(p: Plantilla) { setEditing(p); setEditNombre(p.nombre); setEditCuerpo(p.cuerpo); setEditDescripcion(p.descripcion ?? ""); setEditError(null); setCreating(false); }
+  function startCreate() { setCreating(true); setEditing(null); setEditNombre(""); setEditCuerpo(""); setEditDescripcion(""); setEditError(null); }
   function cancelEdit() { setEditing(null); setCreating(false); setEditError(null); }
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const nombre = editNombre.trim();
-      const cuerpo = editCuerpo.trim();
+      const nombre = editNombre.trim(); const cuerpo = editCuerpo.trim();
       if (!nombre) throw new Error("El nombre es obligatorio");
       if (!cuerpo) throw new Error("El cuerpo no puede estar vacío");
       if (creating) {
@@ -320,10 +304,7 @@ function TemplatePicker({
   });
 
   const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("plantillas").delete().eq("id", id);
-      if (error) throw error;
-    },
+    mutationFn: async (id: string) => { const { error } = await supabase.from("plantillas").delete().eq("id", id); if (error) throw error; },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["plantillas"] }); toast.success("Plantilla eliminada"); },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -344,7 +325,6 @@ function TemplatePicker({
           <button onClick={onClose} className="grid place-items-center h-7 w-7 rounded-md hover:bg-accent"><X className="h-3.5 w-3.5" /></button>
         </div>
       </div>
-
       <div className="flex-1 overflow-y-auto">
         {isFormOpen && (
           <div className="p-4 border-b border-border bg-muted/30 space-y-3">
@@ -371,7 +351,6 @@ function TemplatePicker({
             </div>
           </div>
         )}
-
         {isLoading ? (
           <div className="p-4 space-y-2">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-14 w-full" />)}</div>
         ) : plantillas.length === 0 ? (
@@ -404,23 +383,20 @@ function TemplatePicker({
   );
 }
 
-// ─── Attachment picker ───────────────────────────────────────────────────────
+// ─── Attachment picker ────────────────────────────────────────────────────────
 function AttachmentPicker({ file, onChange }: { file: File | null; onChange: (f: File | null) => void }) {
   const ref = useRef<HTMLInputElement>(null);
-
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0] ?? null;
     if (f && f.size > MAX_FILE_SIZE) { toast.error("El archivo supera el límite de 50 MB"); e.target.value = ""; return; }
     onChange(f);
   }
-
   return (
     <div className="space-y-1.5">
       <label className="text-sm font-medium">Adjunto (opcional)</label>
       <div className="flex items-center gap-2">
         <button type="button" onClick={() => ref.current?.click()} className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-dashed border-border text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-colors">
-          <Paperclip className="h-3.5 w-3.5" />
-          {file ? "Cambiar archivo" : "Adjuntar archivo"}
+          <Paperclip className="h-3.5 w-3.5" />{file ? "Cambiar archivo" : "Adjuntar archivo"}
         </button>
         {file && (
           <div className="flex items-center gap-1.5 text-xs bg-muted rounded-md px-2.5 py-1.5 min-w-0">
@@ -437,215 +413,321 @@ function AttachmentPicker({ file, onChange }: { file: File | null; onChange: (f:
   );
 }
 
-// ─── Contact form fields (shared by add & edit sheet) ───────────────────────
+// ─── Tab definitions for the cliente sheet ────────────────────────────────────
+const TABS = [
+  { id: "principal", label: "Principal", icon: UserPlus },
+  { id: "contacto",  label: "Contacto",  icon: Phone },
+  { id: "direccion", label: "Dirección", icon: MapPin },
+  { id: "avanzado",  label: "Avanzado",  icon: Building2 },
+] as const;
+type TabId = typeof TABS[number]["id"];
+
+// ─── Per-field inline validation ─────────────────────────────────────────────
+type FieldErrors = Partial<Record<keyof typeof EMPTY_FORM, string>>;
+
+function validateField(field: keyof typeof EMPTY_FORM, value: string): string | undefined {
+  if (field === "Nombre" && !value.trim()) return "El nombre es obligatorio";
+  if ((field === "Movil" || field === "TelefonoFijo" || field === "Fax") && value.trim() && !phoneRegex.test(value.trim()))
+    return "Formato E.164, ej. +34611123456";
+  if (field === "Email" && value.trim()) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())) return "Email no válido";
+  }
+  return undefined;
+}
+
+// ─── Contact form — tabbed ────────────────────────────────────────────────────
 function ClienteFormFields({
-  form,
-  setForm,
-  communityNumbers,
-  setFormError,
+  form, setForm, communityNumbers, fieldErrors, setFieldErrors,
 }: {
   form: typeof EMPTY_FORM;
   setForm: React.Dispatch<React.SetStateAction<typeof EMPTY_FORM>>;
   communityNumbers: number[];
-  setFormError: (e: string | null) => void;
+  fieldErrors: FieldErrors;
+  setFieldErrors: React.Dispatch<React.SetStateAction<FieldErrors>>;
 }) {
+  const [activeTab, setActiveTab] = useState<TabId>("principal");
+  const firstInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    // Small delay to let the sheet animate in before focusing
+    const t = setTimeout(() => firstInputRef.current?.focus(), 150);
+    return () => clearTimeout(t);
+  }, []);
+
   function setField(field: keyof typeof EMPTY_FORM) {
     return (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-      setForm((prev) => ({ ...prev, [field]: e.target.value }));
-      setFormError(null);
+      const val = e.target.value;
+      setForm((prev) => ({ ...prev, [field]: val }));
+      const err = validateField(field, val);
+      setFieldErrors((prev) => ({ ...prev, [field]: err }));
     };
   }
 
+  const inp = (field: keyof typeof EMPTY_FORM) =>
+    fieldErrors[field] ? inputInvalidCls : inputCls;
+  const inpIcon = (field: keyof typeof EMPTY_FORM) =>
+    fieldErrors[field] ? inputIconInvalidCls : inputIconCls;
+
   return (
-    <div className="space-y-6 px-5 py-5">
-      {/* Identificación */}
-      <fieldset className="space-y-3">
-        <legend className={fieldsetLegendCls}>Identificación</legend>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <label className={labelCls}>Código</label>
-            <input value={form.Codigo} onChange={setField("Codigo")} placeholder="COD001" className={inputCls} />
-          </div>
-          <div className="space-y-1">
-            <label className={labelCls}>ID Persona</label>
-            <input value={form.id_persona} onChange={setField("id_persona")} placeholder="ID externo" className={inputCls} />
-          </div>
-          <div className="space-y-1">
-            <label className={labelCls}>NIF</label>
-            <input value={form.NIF} onChange={setField("NIF")} placeholder="12345678A" className={inputCls} />
-          </div>
-          <div className="space-y-1">
-            <label className={labelCls}>Núm. comunidad</label>
-            <NumComunidadCombobox
-              options={communityNumbers}
-              value={form.NumComunidad}
-              onChange={(v) => { setForm((p) => ({ ...p, NumComunidad: v })); setFormError(null); }}
-              placeholder="Nº comunidad…"
-            />
-          </div>
-        </div>
-      </fieldset>
+    <div className="flex flex-col h-full">
+      {/* Tab bar */}
+      <div className="flex gap-0.5 px-4 pt-3 pb-0 border-b border-border shrink-0 bg-muted/20">
+        {TABS.map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setActiveTab(id)}
+            className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-t-md border-b-2 transition-colors ${
+              activeTab === id
+                ? "border-primary text-primary bg-background"
+                : "border-transparent text-muted-foreground hover:text-foreground hover:bg-accent/50"
+            }`}
+          >
+            <Icon className="h-3.5 w-3.5" />{label}
+          </button>
+        ))}
+      </div>
 
-      {/* Datos personales */}
-      <fieldset className="space-y-3">
-        <legend className={fieldsetLegendCls}>Datos personales</legend>
-        <div className="space-y-1">
-          <label className={labelCls}>Nombre completo <span className="text-destructive">*</span></label>
-          <input value={form.Nombre} onChange={setField("Nombre")} placeholder="Jane Smith" className={inputCls} />
-        </div>
-        <div className="space-y-1">
-          <label className={labelCls}>Fdenominación</label>
-          <input value={form.Fdenominacion} onChange={setField("Fdenominacion")} placeholder="Denominación fiscal" className={inputCls} />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <label className={labelCls}>Coeficiente</label>
-            <input value={form.Coeficiente} onChange={setField("Coeficiente")} type="number" step="0.0001" placeholder="0.0000" className={inputCls} />
-          </div>
-          <div className="space-y-1">
-            <label className={labelCls}>Cuenta</label>
-            <input value={form.Cuenta} onChange={setField("Cuenta")} placeholder="ES00 0000 0000" className={inputCls} />
-          </div>
-          <div className="space-y-1">
-            <label className={labelCls}>NEMP</label>
-            <input value={form.NEMP} onChange={setField("NEMP")} placeholder="Nº empleado" className={inputCls} />
-          </div>
-          <div className="space-y-1">
-            <label className={labelCls}>Fecha de baja</label>
-            <input value={form.fecha_baja} onChange={setField("fecha_baja")} type="date" className={inputCls} />
-          </div>
-        </div>
-      </fieldset>
+      {/* Tab content */}
+      <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
 
-      {/* Contacto */}
-      <fieldset className="space-y-3">
-        <legend className={fieldsetLegendCls}>Contacto</legend>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <label className={labelCls}>Móvil (WhatsApp)</label>
-            <div className="relative">
-              <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-              <input value={form.Movil} onChange={setField("Movil")} placeholder="+34611123456" className={`${inputIconCls} font-mono`} />
+        {/* ── PRINCIPAL ─────────────────────────────────────────────────────── */}
+        {activeTab === "principal" && (
+          <>
+            <fieldset className="space-y-3">
+              <legend className={sectionTitleCls}>Identificación</legend>
+              {/* Required: Nombre full-width */}
+              <div className="space-y-1">
+                <label className={labelCls}>Nombre completo <span className="text-destructive">*</span></label>
+                <input ref={firstInputRef} value={form.Nombre} onChange={setField("Nombre")} placeholder="Jane Smith" className={inp("Nombre")} />
+                <FieldError msg={fieldErrors.Nombre} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className={labelCls}>NIF / CIF</label>
+                  <input value={form.NIF} onChange={setField("NIF")} placeholder="12345678A" className={inp("NIF")} />
+                </div>
+                <div className="space-y-1">
+                  <label className={labelCls}>Nº Comunidad</label>
+                  <NumComunidadCombobox options={communityNumbers} value={form.NumComunidad} onChange={(v) => { setForm((p) => ({ ...p, NumComunidad: v })); }} placeholder="Nº comunidad…" />
+                </div>
+                <div className="space-y-1">
+                  <label className={labelCls}>Código</label>
+                  <input value={form.Codigo} onChange={setField("Codigo")} placeholder="COD001" className={inp("Codigo")} />
+                </div>
+                <div className="space-y-1">
+                  <label className={labelCls}>ID Persona</label>
+                  <input value={form.id_persona} onChange={setField("id_persona")} placeholder="ID externo" className={inp("id_persona")} />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <label className={labelCls}>Denominación fiscal (Fdenominacion)</label>
+                <input value={form.Fdenominacion} onChange={setField("Fdenominacion")} placeholder="Denominación fiscal" className={inp("Fdenominacion")} />
+              </div>
+            </fieldset>
+
+            <fieldset className="space-y-3">
+              <legend className={sectionTitleCls}>Datos económicos</legend>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className={labelCls}>Coeficiente</label>
+                  <input value={form.Coeficiente} onChange={setField("Coeficiente")} type="number" step="0.0001" placeholder="0.0000" className={inp("Coeficiente")} />
+                </div>
+                <div className="space-y-1">
+                  <label className={labelCls}>Cuenta bancaria</label>
+                  <div className="relative">
+                    <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                    <input value={form.Cuenta} onChange={setField("Cuenta")} placeholder="ES00 0000 0000" className={inpIcon("Cuenta")} />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <label className={labelCls}>NEMP</label>
+                  <input value={form.NEMP} onChange={setField("NEMP")} placeholder="Nº empleado" className={inp("NEMP")} />
+                </div>
+                <div className="space-y-1">
+                  <label className={labelCls}>Fecha de baja</label>
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                    <input value={form.fecha_baja} onChange={setField("fecha_baja")} type="date" className={inpIcon("fecha_baja")} />
+                  </div>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <label className={labelCls}>Pagadores</label>
+                <input value={form.pagadores} onChange={setField("pagadores")} placeholder="Pagadores asociados" className={inp("pagadores")} />
+              </div>
+            </fieldset>
+
+            <fieldset className="space-y-3">
+              <legend className={sectionTitleCls}>Notas</legend>
+              <div className="space-y-1">
+                <div className="relative">
+                  <StickyNote className="absolute left-3 top-3 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                  <textarea value={form.Notas} onChange={setField("Notas")} placeholder="Notas relevantes…" rows={3} maxLength={4000}
+                    className="w-full pl-9 pr-3 py-2.5 rounded-md border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring resize-none transition-shadow" />
+                </div>
+                <div className="text-xs text-muted-foreground text-right">{form.Notas.length}/4000</div>
+              </div>
+            </fieldset>
+          </>
+        )}
+
+        {/* ── CONTACTO ──────────────────────────────────────────────────────── */}
+        {activeTab === "contacto" && (
+          <fieldset className="space-y-4">
+            <legend className={sectionTitleCls}>Datos de contacto</legend>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className={labelCls}>Móvil <span className="text-[10px] text-primary font-medium">(WhatsApp)</span></label>
+                <div className="relative">
+                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                  <input value={form.Movil} onChange={setField("Movil")} placeholder="+34611123456" className={`${inpIcon("Movil")} font-mono`} />
+                </div>
+                <FieldError msg={fieldErrors.Movil} />
+              </div>
+
+              <div className="space-y-1">
+                <label className={labelCls}>Teléfono fijo</label>
+                <div className="relative">
+                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                  <input value={form.TelefonoFijo} onChange={setField("TelefonoFijo")} placeholder="+34911123456" className={`${inpIcon("TelefonoFijo")} font-mono`} />
+                </div>
+                <FieldError msg={fieldErrors.TelefonoFijo} />
+              </div>
+
+              <div className="space-y-1">
+                <label className={labelCls}>Email</label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                  <input value={form.Email} onChange={setField("Email")} type="email" placeholder="jane@example.com" className={inpIcon("Email")} />
+                </div>
+                <FieldError msg={fieldErrors.Email} />
+              </div>
+
+              <div className="space-y-1">
+                <label className={labelCls}>Fax</label>
+                <div className="relative">
+                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                  <input value={form.Fax} onChange={setField("Fax")} placeholder="+34911000000" className={`${inpIcon("Fax")} font-mono`} />
+                </div>
+                <FieldError msg={fieldErrors.Fax} />
+              </div>
             </div>
-          </div>
-          <div className="space-y-1">
-            <label className={labelCls}>Teléfono fijo</label>
-            <div className="relative">
-              <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-              <input value={form.TelefonoFijo} onChange={setField("TelefonoFijo")} placeholder="+34911123456" className={`${inputIconCls} font-mono`} />
-            </div>
-          </div>
-          <div className="space-y-1">
-            <label className={labelCls}>Fax</label>
-            <div className="relative">
-              <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-              <input value={form.Fax} onChange={setField("Fax")} placeholder="+34911000000" className={`${inputIconCls} font-mono`} />
-            </div>
-          </div>
-          <div className="space-y-1">
-            <label className={labelCls}>Email</label>
-            <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-              <input value={form.Email} onChange={setField("Email")} type="email" placeholder="jane@example.com" className={inputIconCls} />
-            </div>
-          </div>
-        </div>
-        <div className="space-y-1">
-          <label className={labelCls}>Web</label>
-          <div className="relative">
-            <Globe className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-            <input value={form.Web} onChange={setField("Web")} placeholder="https://www.example.com" className={inputIconCls} />
-          </div>
-        </div>
-      </fieldset>
 
-      {/* Dirección */}
-      <fieldset className="space-y-3">
-        <legend className={fieldsetLegendCls}>Dirección</legend>
-        <div className="space-y-1">
-          <label className={labelCls}>Dirección</label>
-          <div className="relative">
-            <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-            <input value={form.Direccion} onChange={setField("Direccion")} placeholder="Calle Mayor, 12, 3B" className={inputIconCls} />
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <label className={labelCls}>Código postal</label>
-            <input value={form.Cpostal} onChange={setField("Cpostal")} placeholder="28001" className={inputCls} />
-          </div>
-          <div className="space-y-1">
-            <label className={labelCls}>Bloque</label>
-            <input value={form.bloque} onChange={setField("bloque")} placeholder="Bloque A" className={inputCls} />
-          </div>
-          <div className="space-y-1">
-            <label className={labelCls}>Cód. distribución</label>
-            <input value={form.coddistri} onChange={setField("coddistri")} placeholder="D01" className={inputCls} />
-          </div>
-          <div className="space-y-1">
-            <label className={labelCls}>Nom. distribución</label>
-            <input value={form.Nomdistri} onChange={setField("Nomdistri")} placeholder="Zona Norte" className={inputCls} />
-          </div>
-        </div>
-      </fieldset>
+            <div className="space-y-1">
+              <label className={labelCls}>Web</label>
+              <div className="relative">
+                <Globe className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                <input value={form.Web} onChange={setField("Web")} placeholder="https://www.example.com" className={inpIcon("Web")} />
+              </div>
+            </div>
 
-      {/* Datos del bajo */}
-      <fieldset className="space-y-3">
-        <legend className={fieldsetLegendCls}>Datos del bajo</legend>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1 col-span-2 sm:col-span-1">
-            <label className={labelCls}>Nombre bajo</label>
-            <input value={form.BajoNombre} onChange={setField("BajoNombre")} placeholder="Nombre del bajo" className={inputCls} />
-          </div>
-          <div className="space-y-1">
-            <label className={labelCls}>NIF bajo</label>
-            <input value={form.BajoNIF} onChange={setField("BajoNIF")} placeholder="NIF del bajo" className={inputCls} />
-          </div>
-        </div>
-        <div className="space-y-1">
-          <label className={labelCls}>Fdenominación bajo</label>
-          <input value={form.BajoFdenominacion} onChange={setField("BajoFdenominacion")} placeholder="Denominación fiscal del bajo" className={inputCls} />
-        </div>
-      </fieldset>
+            {/* Phone format hint */}
+            <div className="flex items-start gap-2 rounded-md border border-border bg-muted/40 px-3 py-2.5">
+              <Info className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
+              <p className="text-xs text-muted-foreground">
+                Los teléfonos deben usar formato internacional E.164.<br />
+                <span className="font-medium text-foreground">Ejemplo:</span> <code className="font-mono text-primary">+34611123456</code>
+              </p>
+            </div>
+          </fieldset>
+        )}
 
-      {/* Pagadores + Notas */}
-      <fieldset className="space-y-3">
-        <legend className={fieldsetLegendCls}>Pagadores y notas</legend>
-        <div className="space-y-1">
-          <label className={labelCls}>Pagadores</label>
-          <input value={form.pagadores} onChange={setField("pagadores")} placeholder="Pagadores asociados" className={inputCls} />
-        </div>
-        <div className="space-y-1">
-          <label className={labelCls}>Notas</label>
-          <div className="relative">
-            <StickyNote className="absolute left-3 top-3 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-            <textarea value={form.Notas} onChange={setField("Notas")} placeholder="Notas relevantes…" rows={3} maxLength={4000} className="w-full pl-9 pr-3 py-2.5 rounded-md border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring resize-none" />
-          </div>
-        </div>
-      </fieldset>
+        {/* ── DIRECCIÓN ─────────────────────────────────────────────────────── */}
+        {activeTab === "direccion" && (
+          <>
+            <fieldset className="space-y-3">
+              <legend className={sectionTitleCls}>Dirección principal</legend>
+              <div className="space-y-1">
+                <label className={labelCls}>Dirección</label>
+                <div className="relative">
+                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                  <input value={form.Direccion} onChange={setField("Direccion")} placeholder="Calle Mayor, 12, 3B" className={inpIcon("Direccion")} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className={labelCls}>Código postal</label>
+                  <input value={form.Cpostal} onChange={setField("Cpostal")} placeholder="28001" className={inp("Cpostal")} />
+                </div>
+                <div className="space-y-1">
+                  <label className={labelCls}>Bloque</label>
+                  <input value={form.bloque} onChange={setField("bloque")} placeholder="Bloque A" className={inp("bloque")} />
+                </div>
+                <div className="space-y-1">
+                  <label className={labelCls}>Cód. distribución</label>
+                  <input value={form.coddistri} onChange={setField("coddistri")} placeholder="D01" className={inp("coddistri")} />
+                </div>
+                <div className="space-y-1">
+                  <label className={labelCls}>Nom. distribución</label>
+                  <input value={form.Nomdistri} onChange={setField("Nomdistri")} placeholder="Zona Norte" className={inp("Nomdistri")} />
+                </div>
+              </div>
+            </fieldset>
+
+            <fieldset className="space-y-3">
+              <legend className={sectionTitleCls}>Datos del bajo</legend>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1 col-span-2">
+                  <label className={labelCls}>Nombre bajo</label>
+                  <input value={form.BajoNombre} onChange={setField("BajoNombre")} placeholder="Nombre del bajo" className={inp("BajoNombre")} />
+                </div>
+                <div className="space-y-1">
+                  <label className={labelCls}>NIF bajo</label>
+                  <input value={form.BajoNIF} onChange={setField("BajoNIF")} placeholder="NIF del bajo" className={inp("BajoNIF")} />
+                </div>
+                <div className="space-y-1 col-span-2">
+                  <label className={labelCls}>Fdenominación bajo</label>
+                  <input value={form.BajoFdenominacion} onChange={setField("BajoFdenominacion")} placeholder="Denominación fiscal del bajo" className={inp("BajoFdenominacion")} />
+                </div>
+              </div>
+            </fieldset>
+          </>
+        )}
+
+        {/* ── AVANZADO ──────────────────────────────────────────────────────── */}
+        {activeTab === "avanzado" && (
+          <fieldset className="space-y-3">
+            <legend className={sectionTitleCls}>Campos avanzados</legend>
+            <p className="text-xs text-muted-foreground">Campos técnicos o de integración con sistemas externos.</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className={labelCls}>Código</label>
+                <input value={form.Codigo} onChange={setField("Codigo")} placeholder="COD001" className={inp("Codigo")} />
+              </div>
+              <div className="space-y-1">
+                <label className={labelCls}>ID Persona (externo)</label>
+                <input value={form.id_persona} onChange={setField("id_persona")} placeholder="ID externo" className={inp("id_persona")} />
+              </div>
+            </div>
+          </fieldset>
+        )}
+      </div>
     </div>
   );
 }
 
-// ─── Add / Edit sheet ────────────────────────────────────────────────────────
+// ─── Add / Edit sheet ─────────────────────────────────────────────────────────
 function ClienteSheet({
-  mode,
-  cliente,
-  communityNumbers,
-  onClose,
+  mode, cliente, communityNumbers, onClose,
 }: {
-  mode: "add" | "edit";
-  cliente?: Cliente;
-  communityNumbers: number[];
-  onClose: () => void;
+  mode: "add" | "edit"; cliente?: Cliente; communityNumbers: number[]; onClose: () => void;
 }) {
   const qc = useQueryClient();
   const [form, setForm] = useState<typeof EMPTY_FORM>(
     mode === "edit" && cliente ? clienteToForm(cliente) : EMPTY_FORM
   );
-  const [formError, setFormError] = useState<string | null>(null);
-
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const isEdit = mode === "edit" && !!cliente;
+
+  // Close on Escape
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) { if (e.key === "Escape") onClose(); }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   const mutation = useMutation({
     mutationFn: async (input: typeof EMPTY_FORM) => {
@@ -676,7 +758,6 @@ function ClienteSheet({
         id_persona: input.id_persona || null,
         NumComunidad: input.NumComunidad ? parseFloat(input.NumComunidad) : null,
       };
-
       if (isEdit) {
         const { error } = await supabase.from("clientes").update(payload).eq("id", cliente!.id);
         if (error) throw error;
@@ -691,68 +772,91 @@ function ClienteSheet({
       toast.success(isEdit ? "Contacto actualizado" : "Contacto añadido");
       onClose();
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => setSubmitError(e.message),
   });
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    // Run full schema validation to catch any remaining issues
     const parsed = clienteSchema.safeParse(form);
-    if (!parsed.success) { setFormError(parsed.error.issues[0].message); return; }
+    if (!parsed.success) {
+      const firstIssue = parsed.error.issues[0];
+      // Also set inline error for the specific field
+      const fieldName = firstIssue.path[0] as keyof typeof EMPTY_FORM;
+      setFieldErrors((prev) => ({ ...prev, [fieldName]: firstIssue.message }));
+      setSubmitError(firstIssue.message);
+      return;
+    }
+    setSubmitError(null);
     mutation.mutate(form);
   }
 
+  const hasFieldErrors = Object.values(fieldErrors).some(Boolean);
+
   return (
-    <div className="fixed inset-0 z-40 flex">
+    <div className="fixed inset-0 z-40 flex" role="dialog" aria-modal="true" aria-label={isEdit ? "Editar contacto" : "Nuevo contacto"}>
       <div className="absolute inset-0 bg-foreground/30 backdrop-blur-sm" onClick={onClose} />
       <div className="relative ml-auto h-full w-full max-w-lg bg-background border-l border-border shadow-2xl flex flex-col animate-in slide-in-from-right duration-200">
+
         {/* Header */}
         <div className="flex items-center justify-between px-5 h-16 border-b border-border shrink-0">
           <div className="flex items-center gap-3">
-            <div className="grid place-items-center h-8 w-8 rounded-full bg-primary/10 text-primary">
+            <div className={`grid place-items-center h-9 w-9 rounded-full ${
+              isEdit ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                     : "bg-primary/10 text-primary"
+            }`}>
               {isEdit ? <Pencil className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
             </div>
             <div>
-              <h3 className="font-semibold text-sm">{isEdit ? "Editar contacto" : "Nuevo contacto"}</h3>
-              {isEdit && <p className="text-xs text-muted-foreground">{cliente!.Nombre ?? "(sin nombre)"}</p>}
+              <h2 className="font-semibold text-sm">{isEdit ? "Editar contacto" : "Nuevo contacto"}</h2>
+              {isEdit
+                ? <p className="text-xs text-muted-foreground truncate max-w-[240px]">{cliente!.Nombre ?? "(sin nombre)"}</p>
+                : <p className="text-xs text-muted-foreground">Rellena al menos el nombre</p>
+              }
             </div>
           </div>
-          <button onClick={onClose} className="grid place-items-center h-9 w-9 rounded-md hover:bg-accent">
+          <button onClick={onClose} aria-label="Cerrar" className="grid place-items-center h-9 w-9 rounded-md hover:bg-accent transition-colors">
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        {/* Scrollable form body */}
+        {/* Body */}
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 min-h-0 flex flex-col">
             <ClienteFormFields
               form={form}
               setForm={setForm}
               communityNumbers={communityNumbers}
-              setFormError={setFormError}
+              fieldErrors={fieldErrors}
+              setFieldErrors={setFieldErrors}
             />
           </div>
 
           {/* Sticky footer */}
-          <div className="shrink-0 border-t border-border px-5 py-4 bg-background space-y-2">
-            {formError && (
-              <p className="text-xs text-destructive flex items-center gap-1.5">
-                <AlertCircle className="h-3.5 w-3.5 shrink-0" /> {formError}
-              </p>
+          <div className="shrink-0 border-t border-border px-5 py-4 bg-background/95 backdrop-blur space-y-2.5">
+            {(submitError || hasFieldErrors) && (
+              <div className="flex items-center gap-2 rounded-md bg-destructive/10 border border-destructive/20 px-3 py-2">
+                <AlertCircle className="h-3.5 w-3.5 text-destructive shrink-0" />
+                <p className="text-xs text-destructive">{submitError ?? "Corrige los errores marcados antes de guardar."}</p>
+              </div>
             )}
             <div className="flex gap-2">
-              <button type="button" onClick={onClose} className="flex-1 h-10 rounded-md border border-border text-sm font-medium hover:bg-accent">
+              <button
+                type="button" onClick={onClose}
+                className="flex-1 h-10 rounded-md border border-border text-sm font-medium hover:bg-accent transition-colors"
+              >
                 Cancelar
               </button>
               <button
-                type="submit"
-                disabled={mutation.isPending}
-                className="flex-1 h-10 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-60 inline-flex items-center justify-center gap-2"
+                type="submit" disabled={mutation.isPending}
+                className="flex-1 h-10 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-60 inline-flex items-center justify-center gap-2 transition-colors"
               >
                 {mutation.isPending
                   ? <><Loader2 className="h-4 w-4 animate-spin" /> Guardando…</>
                   : <><Check className="h-4 w-4" /> {isEdit ? "Guardar cambios" : "Añadir contacto"}</>}
               </button>
             </div>
+            <p className="text-[11px] text-muted-foreground text-center">Pulsa <kbd className="font-mono bg-muted px-1 rounded">Esc</kbd> para cerrar sin guardar</p>
           </div>
         </form>
       </div>
@@ -760,13 +864,87 @@ function ClienteSheet({
   );
 }
 
-// ─── Main page ───────────────────────────────────────────────────────────────
+// ─── Contact card row ─────────────────────────────────────────────────────────
+function ContactRow({
+  cliente,
+  onEdit,
+  onDelete,
+  onCompose,
+}: {
+  cliente: Cliente;
+  onEdit: () => void;
+  onDelete: () => void;
+  onCompose: () => void;
+}) {
+  const hasMobile = !!cliente.Movil;
+  const hasEmail = !!cliente.Email;
+
+  return (
+    <div className="group flex items-center gap-3 px-4 py-3 hover:bg-accent/40 transition-colors">
+      {/* Avatar */}
+      <div className="grid place-items-center h-9 w-9 rounded-full bg-primary/10 text-primary font-semibold text-sm shrink-0 select-none">
+        {(cliente.Nombre ?? "?")[0].toUpperCase()}
+      </div>
+
+      {/* Main info */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="font-medium text-sm truncate">{cliente.Nombre ?? <span className="text-muted-foreground italic">Sin nombre</span>}</span>
+          {cliente.fecha_baja && (
+            <span className="shrink-0 inline-flex items-center rounded-full bg-destructive/10 text-destructive text-[10px] font-medium px-1.5 py-0.5">Baja</span>
+          )}
+        </div>
+        <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground">
+          {cliente.Movil && <span className="flex items-center gap-1"><Phone className="h-3 w-3" />{cliente.Movil}</span>}
+          {cliente.Email && <span className="flex items-center gap-1 truncate"><Mail className="h-3 w-3" /><span className="truncate">{cliente.Email}</span></span>}
+          {!cliente.Movil && !cliente.Email && <span className="italic">Sin datos de contacto</span>}
+        </div>
+      </div>
+
+      {/* NIF pill */}
+      {cliente.NIF && (
+        <span className="hidden sm:inline-flex shrink-0 text-[11px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full font-mono">
+          {cliente.NIF}
+        </span>
+      )}
+
+      {/* Actions — visible on hover */}
+      <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+        {hasMobile && (
+          <button
+            onClick={onCompose}
+            title="Enviar WhatsApp"
+            className="grid place-items-center h-8 w-8 rounded-md hover:bg-green-100 hover:text-green-700 dark:hover:bg-green-900/30 dark:hover:text-green-400 text-muted-foreground transition-colors"
+            aria-label={`Enviar WhatsApp a ${cliente.Nombre}`}
+          >
+            <Send className="h-3.5 w-3.5" />
+          </button>
+        )}
+        <button
+          onClick={onEdit}
+          title="Editar"
+          className="grid place-items-center h-8 w-8 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+          aria-label={`Editar ${cliente.Nombre}`}
+        >
+          <Pencil className="h-3.5 w-3.5" />
+        </button>
+        <button
+          onClick={onDelete}
+          title="Eliminar"
+          className="grid place-items-center h-8 w-8 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+          aria-label={`Eliminar ${cliente.Nombre}`}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main page ────────────────────────────────────────────────────────────────
 function ContactsPage() {
   const qc = useQueryClient();
-  const { data, isLoading, error } = useQuery({
-    queryKey: ["contacts"],
-    queryFn: fetchClientes,
-  });
+  const { data, isLoading, error } = useQuery({ queryKey: ["contacts"], queryFn: fetchClientes });
 
   const [composeFor, setComposeFor] = useState<Cliente | null>(null);
   const [composeBulk, setComposeBulk] = useState<{ num: number; clientes: Cliente[] } | null>(null);
@@ -787,7 +965,12 @@ function ContactsPage() {
     let list = data;
     if (nameSearch.trim()) {
       const q = nameSearch.trim().toLowerCase();
-      list = list.filter((c) => c.Nombre?.toLowerCase().includes(q));
+      list = list.filter((c) =>
+        c.Nombre?.toLowerCase().includes(q) ||
+        c.NIF?.toLowerCase().includes(q) ||
+        c.Movil?.includes(q) ||
+        c.Email?.toLowerCase().includes(q)
+      );
     }
     if (communityFilter.trim()) {
       const num = parseFloat(communityFilter.trim());
@@ -831,6 +1014,20 @@ function ContactsPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  // Global shortcut: / focuses search
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "/" && document.activeElement?.tagName !== "INPUT" && document.activeElement?.tagName !== "TEXTAREA") {
+        e.preventDefault();
+        searchRef.current?.focus();
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       {/* Page header */}
@@ -838,12 +1035,14 @@ function ContactsPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Contactos</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {data ? `${data.length} contacto${data.length !== 1 ? "s" : ""} en total` : "Gestiona tus contactos de WhatsApp Business"}
+            {data
+              ? `${data.length} contacto${data.length !== 1 ? "s" : ""} · ${communityNumbers.length} comunidad${communityNumbers.length !== 1 ? "es" : ""}`
+              : "Gestiona tus contactos de WhatsApp Business"}
           </p>
         </div>
         <button
           onClick={() => setClienteSheet({ mode: "add" })}
-          className="h-10 inline-flex items-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+          className="h-10 inline-flex items-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors shadow-sm"
         >
           <UserPlus className="h-4 w-4" />
           Nuevo contacto
@@ -858,26 +1057,23 @@ function ContactsPage() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
               <input
-                type="text"
-                value={nameSearch}
+                ref={searchRef}
+                type="text" value={nameSearch}
                 onChange={(e) => setNameSearch(e.target.value)}
-                placeholder="Buscar por nombre…"
+                placeholder="Buscar por nombre, NIF, teléfono, email… (/)"
                 className="w-full h-9 pl-9 pr-3 rounded-md border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring"
               />
+              {nameSearch && (
+                <button onClick={() => setNameSearch("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" aria-label="Limpiar búsqueda">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
             </div>
-            <div className="sm:w-56">
-              <NumComunidadCombobox
-                options={communityNumbers}
-                value={communityFilter}
-                onChange={setCommunityFilter}
-                placeholder="Filtrar por comunidad…"
-              />
+            <div className="sm:w-52">
+              <NumComunidadCombobox options={communityNumbers} value={communityFilter} onChange={setCommunityFilter} placeholder="Filtrar comunidad…" />
             </div>
-            {(nameSearch || communityFilter) && (
-              <button
-                onClick={() => { setNameSearch(""); setCommunityFilter(""); }}
-                className="h-9 px-3 rounded-md border border-border text-xs text-muted-foreground hover:bg-accent flex items-center gap-1 shrink-0"
-              >
+            {communityFilter && (
+              <button onClick={() => setCommunityFilter("")} className="h-9 px-3 rounded-md border border-border text-xs text-muted-foreground hover:bg-accent flex items-center gap-1 shrink-0">
                 <X className="h-3.5 w-3.5" /> Limpiar
               </button>
             )}
@@ -904,133 +1100,21 @@ function ContactsPage() {
             </p>
             <button
               onClick={() => qc.invalidateQueries({ queryKey: ["contacts"] })}
-              className="inline-flex items-center gap-2 h-9 px-3 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90"
+              className="inline-flex items-center gap-2 h-9 px-3 rounded-md border border-border text-sm hover:bg-accent"
             >
               Reintentar
             </button>
           </div>
-        ) : grouped.length > 0 ? (
-          <div className="divide-y divide-border">
-            {grouped.map(([groupKey, members]) => {
-              const isNoCommunity = groupKey === "__sin_comunidad__";
-              const collapsed = collapsedGroups.has(groupKey);
-              const withPhone = members.filter((c) => c.Movil);
-              return (
-                <div key={groupKey}>
-                  {/* Group header */}
-                  <div className="px-5 py-2.5 bg-muted/40 flex items-center justify-between gap-3">
-                    <button
-                      onClick={() => toggleGroup(groupKey)}
-                      className="flex items-center gap-2 text-sm font-medium hover:text-primary transition-colors"
-                    >
-                      {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                      {isNoCommunity ? (
-                        <span className="text-muted-foreground italic">Sin comunidad asignada</span>
-                      ) : (
-                        <>
-                          <Users className="h-4 w-4 text-muted-foreground" />
-                          Comunidad {groupKey}
-                        </>
-                      )}
-                      <span className="text-xs text-muted-foreground font-normal">
-                        ({members.length} contacto{members.length !== 1 ? "s" : ""})
-                      </span>
-                    </button>
-                    {!isNoCommunity && withPhone.length > 0 && (
-                      <button
-                        onClick={() => setComposeBulk({ num: parseFloat(groupKey), clientes: withPhone })}
-                        className="inline-flex items-center gap-1.5 h-7 px-3 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 shrink-0"
-                      >
-                        <Send className="h-3 w-3" />
-                        Enviar a comunidad ({withPhone.length})
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Contact rows */}
-                  {!collapsed && (
-                    <ul className="divide-y divide-border">
-                      {members.map((c) => (
-                        <li key={c.id} className="px-5 py-3 pl-10 flex items-center justify-between gap-3 group hover:bg-muted/20 transition-colors">
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium truncate">
-                                {c.Nombre ?? "(sin nombre)"}
-                              </span>
-                              {c.NIF && <span className="text-xs text-muted-foreground font-mono hidden sm:inline">{c.NIF}</span>}
-                              {c.fecha_baja && (
-                                <span className="text-xs bg-destructive/10 text-destructive px-1.5 py-0.5 rounded-full font-medium shrink-0">Baja</span>
-                              )}
-                            </div>
-                            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5">
-                              {c.Movil && (
-                                <span className="text-xs text-muted-foreground font-mono flex items-center gap-1">
-                                  <Phone className="h-3 w-3" />{c.Movil}
-                                </span>
-                              )}
-                              {c.Email && (
-                                <span className="text-xs text-muted-foreground flex items-center gap-1">
-                                  <Mail className="h-3 w-3" />{c.Email}
-                                </span>
-                              )}
-                              {c.Nomdistri && (
-                                <span className="text-xs text-muted-foreground flex items-center gap-1">
-                                  <Building2 className="h-3 w-3" />{c.Nomdistri}
-                                </span>
-                              )}
-                            </div>
-                            {c.Notas && (
-                              <p className="text-xs text-muted-foreground mt-0.5 italic truncate max-w-sm">{c.Notas}</p>
-                            )}
-                          </div>
-
-                          {/* Actions — always visible on mobile, hover-reveal on desktop */}
-                          <div className="flex items-center gap-1.5 shrink-0 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                            {c.Movil && (
-                              <button
-                                onClick={() => setComposeFor(c)}
-                                title="Enviar mensaje"
-                                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90"
-                              >
-                                <Send className="h-3.5 w-3.5" />
-                                <span className="hidden sm:inline">Enviar</span>
-                              </button>
-                            )}
-                            <button
-                              onClick={() => setClienteSheet({ mode: "edit", cliente: c })}
-                              title="Editar contacto"
-                              className="grid place-items-center h-8 w-8 rounded-md border border-border text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                              aria-label="Editar"
-                            >
-                              <Pencil className="h-3.5 w-3.5" />
-                            </button>
-                            <button
-                              onClick={() => { if (confirm(`¿Eliminar a ${c.Nombre ?? "este contacto"}?`)) deleteCliente.mutate(c.id); }}
-                              title="Eliminar contacto"
-                              className="grid place-items-center h-8 w-8 rounded-md border border-border text-muted-foreground hover:bg-destructive hover:text-destructive-foreground hover:border-destructive transition-colors"
-                              aria-label="Eliminar"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="p-12 text-center">
+        ) : filteredData.length === 0 ? (
+          <div className="p-10 text-center">
             <div className="mx-auto grid place-items-center h-12 w-12 rounded-full bg-muted text-muted-foreground mb-3">
               <UsersRound className="h-6 w-6" />
             </div>
-            <p className="text-sm font-medium">
-              {nameSearch || communityFilter ? "Sin resultados para esta búsqueda" : "Sin contactos todavía"}
-            </p>
+            <p className="text-sm font-medium">{nameSearch || communityFilter ? "Sin resultados" : "No hay contactos"}</p>
             <p className="text-xs text-muted-foreground mt-1 mb-4">
-              {nameSearch || communityFilter ? "Prueba con otros términos de búsqueda." : "Añade tu primer contacto para empezar."}
+              {nameSearch || communityFilter
+                ? "Prueba con otros términos de búsqueda."
+                : "Añade tu primer contacto con el botón de arriba."}
             </p>
             {!nameSearch && !communityFilter && (
               <button
@@ -1041,10 +1125,73 @@ function ContactsPage() {
               </button>
             )}
           </div>
+        ) : (
+          <div className="divide-y divide-border">
+            {grouped.map(([key, members]) => {
+              const isCollapsed = collapsedGroups.has(key);
+              const label = key === "__sin_comunidad__" ? "Sin comunidad" : `Comunidad ${key}`;
+              return (
+                <div key={key}>
+                  {/* Group header */}
+                  <button
+                    type="button"
+                    onClick={() => toggleGroup(key)}
+                    className="w-full flex items-center justify-between px-4 py-2 bg-muted/30 hover:bg-muted/60 transition-colors text-xs font-semibold text-muted-foreground"
+                  >
+                    <span className="flex items-center gap-2">
+                      {isCollapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                      {label}
+                      <span className="text-[11px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full font-normal">
+                        {members.length}
+                      </span>
+                    </span>
+                    {!isCollapsed && key !== "__sin_comunidad__" && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setComposeBulk({ num: parseFloat(key), clientes: members }); }}
+                        className="inline-flex items-center gap-1 h-6 px-2 rounded-md bg-background border border-border text-[11px] font-medium hover:bg-accent transition-colors"
+                        aria-label={`Enviar mensaje a toda la comunidad ${key}`}
+                      >
+                        <Send className="h-3 w-3" /> Enviar a todos
+                      </button>
+                    )}
+                  </button>
+
+                  {/* Members */}
+                  {!isCollapsed && (
+                    <div>
+                      {members.map((c) => (
+                        <ContactRow
+                          key={c.id}
+                          cliente={c}
+                          onEdit={() => setClienteSheet({ mode: "edit", cliente: c })}
+                          onDelete={() => {
+                            if (confirm(`¿Eliminar a "${c.Nombre ?? "este contacto"}"? Esta acción no se puede deshacer.`))
+                              deleteCliente.mutate(c.id);
+                          }}
+                          onCompose={() => setComposeFor(c)}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
 
-      {/* Sheets & modals */}
+      {/* ── Compose single ── */}
+      {composeFor && (
+        <ComposeModal cliente={composeFor} onClose={() => setComposeFor(null)} />
+      )}
+
+      {/* ── Compose bulk ── */}
+      {composeBulk && (
+        <BulkComposeModal num={composeBulk.num} clientes={composeBulk.clientes} onClose={() => setComposeBulk(null)} />
+      )}
+
+      {/* ── Add / Edit sheet ── */}
       {clienteSheet && (
         <ClienteSheet
           mode={clienteSheet.mode}
@@ -1053,263 +1200,225 @@ function ContactsPage() {
           onClose={() => setClienteSheet(null)}
         />
       )}
-      {composeFor && <ComposeSheet cliente={composeFor} onClose={() => setComposeFor(null)} />}
-      {composeBulk && (
-        <BulkComposeSheet
-          numComunidad={composeBulk.num}
-          clientes={composeBulk.clientes}
-          onClose={() => setComposeBulk(null)}
-        />
-      )}
     </div>
   );
 }
 
-// ─── Helper: upload attachment ────────────────────────────────────────────────
-async function uploadAttachment(file: File): Promise<{ path: string; url: string }> {
-  const ext = file.name.split(".").pop() ?? "bin";
-  const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-  const { error } = await supabase.storage
-    .from("adjuntos")
-    .upload(path, file, { contentType: file.type, upsert: false });
-  if (error) throw new Error(`Error al subir el archivo: ${error.message}`);
-  const { data } = supabase.storage.from("adjuntos").getPublicUrl(path);
-  return { path, url: data.publicUrl };
-}
-
-// ─── Individual compose sheet ─────────────────────────────────────────────────
-function ComposeSheet({ cliente, onClose }: { cliente: Cliente; onClose: () => void }) {
-  const send = useServerFn(sendWhatsAppMessage);
-  const qc = useQueryClient();
-  const [body, setBody] = useState("");
+// ─── Compose modal (single) ───────────────────────────────────────────────────
+function ComposeModal({ cliente, onClose }: { cliente: Cliente; onClose: () => void }) {
+  const sendFn = useServerFn(sendWhatsAppMessage);
+  const [message, setMessage] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [showTemplates, setShowTemplates] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [isSending, setIsSending] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const mutation = useMutation({
-    mutationFn: async () => {
-      const trimmed = body.trim();
-      if (!trimmed) throw new Error("El mensaje no puede estar vacío");
-      let adjunto_url: string | undefined;
-      let adjunto_nombre: string | undefined;
-      let adjunto_mime: string | undefined;
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) { if (e.key === "Escape") onClose(); }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  useEffect(() => { textareaRef.current?.focus(); }, []);
+
+  async function handleSend() {
+    if (!message.trim() && !file) { toast.error("Escribe un mensaje o adjunta un archivo"); return; }
+    setIsSending(true);
+    try {
+      let mediaData: { base64: string; mimeType: string; fileName: string } | undefined;
       if (file) {
-        const uploaded = await uploadAttachment(file);
-        adjunto_url = uploaded.url;
-        adjunto_nombre = file.name;
-        adjunto_mime = file.type;
+        const buf = await file.arrayBuffer();
+        const bytes = new Uint8Array(buf);
+        let bin = "";
+        for (const b of bytes) bin += String.fromCharCode(b);
+        mediaData = { base64: btoa(bin), mimeType: file.type, fileName: file.name };
       }
-      const res = await send({
-        data: {
-          cliente_id: cliente.id,
-          nombre_cliente: cliente.Nombre ?? "",
-          recipient_phone: cliente.Movil!,
-          message_body: trimmed,
-          adjunto_url,
-          adjunto_nombre,
-          adjunto_mime,
-        },
-      });
-      if (!res.ok) throw new Error(res.error);
-      return res;
-    },
-    onSuccess: () => {
-      toast.success("Mensaje enviado");
-      qc.invalidateQueries({ queryKey: ["messages-log"] });
-      qc.invalidateQueries({ queryKey: ["recent"] });
-      qc.invalidateQueries({ queryKey: ["stats"] });
+      await sendFn({ data: { to: cliente.Movil!, message: message.trim(), media: mediaData } });
+      toast.success(`Mensaje enviado a ${cliente.Nombre ?? cliente.Movil}`);
       onClose();
-    },
-    onError: (e: Error) => setError(e.message),
-  });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error al enviar el mensaje");
+    } finally {
+      setIsSending(false);
+    }
+  }
 
   return (
-    <div className="fixed inset-0 z-40 flex">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" role="dialog" aria-modal="true">
       <div className="absolute inset-0 bg-foreground/30 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative ml-auto h-full w-full max-w-md bg-background border-l border-border shadow-2xl flex flex-col animate-in slide-in-from-right duration-200">
-        <div className="flex items-center justify-between px-5 h-16 border-b border-border">
-          <div>
-            <h3 className="font-semibold">Nuevo mensaje</h3>
-            <p className="text-xs text-muted-foreground">vía WhatsApp Business</p>
+      <div className="relative w-full max-w-lg bg-background rounded-t-2xl sm:rounded-2xl border border-border shadow-2xl flex flex-col max-h-[90vh] animate-in slide-in-from-bottom sm:fade-in duration-200">
+        {showTemplates ? (
+          <div className="flex-1 overflow-hidden">
+            <TemplatePicker onSelect={(cuerpo) => { setMessage(cuerpo); setShowTemplates(false); setTimeout(() => textareaRef.current?.focus(), 50); }} onClose={() => setShowTemplates(false)} />
           </div>
-          <button onClick={onClose} className="grid place-items-center h-9 w-9 rounded-md hover:bg-accent"><X className="h-4 w-4" /></button>
-        </div>
-
-        <div className="flex flex-1 min-h-0">
-          {showTemplates && (
-            <div className="w-72 border-r border-border flex flex-col overflow-hidden shrink-0">
-              <TemplatePicker onSelect={(cuerpo) => { setBody(cuerpo); setShowTemplates(false); }} onClose={() => setShowTemplates(false)} />
-            </div>
-          )}
-          <div className="flex-1 flex flex-col min-w-0">
-            <div className="p-5 space-y-4 flex-1 overflow-y-auto">
-              <div className="rounded-lg border border-border bg-muted/30 p-3">
-                <div className="text-xs text-muted-foreground">Para</div>
-                <div className="font-medium mt-0.5">{cliente.Nombre ?? "(sin nombre)"}</div>
-                <div className="text-xs font-mono text-muted-foreground mt-0.5">{cliente.Movil}</div>
-                {cliente.NumComunidad != null && <div className="text-xs text-muted-foreground mt-0.5">Comunidad {cliente.NumComunidad}</div>}
-                {cliente.Nomdistri && <div className="text-xs text-muted-foreground mt-0.5">{cliente.Nomdistri}</div>}
+        ) : (
+          <>
+            <div className="flex items-center justify-between px-5 h-14 border-b border-border shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="grid place-items-center h-7 w-7 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                  <Send className="h-3.5 w-3.5" />
+                </div>
+                <div>
+                  <p className="font-semibold text-sm">{cliente.Nombre ?? cliente.Movil}</p>
+                  {cliente.Nombre && <p className="text-xs text-muted-foreground font-mono">{cliente.Movil}</p>}
+                </div>
               </div>
-              <div>
-                <div className="flex items-center justify-between mb-1">
+              <button onClick={onClose} aria-label="Cerrar" className="grid place-items-center h-8 w-8 rounded-md hover:bg-accent"><X className="h-4 w-4" /></button>
+            </div>
+            <div className="p-5 space-y-4 flex-1 overflow-y-auto">
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
                   <label className="text-sm font-medium">Mensaje</label>
-                  <button
-                    type="button"
-                    onClick={() => setShowTemplates((v) => !v)}
-                    className={`inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-xs font-medium transition-colors ${showTemplates ? "bg-primary text-primary-foreground" : "border border-border text-muted-foreground hover:bg-accent hover:text-foreground"}`}
-                  >
-                    <BookTemplate className="h-3.5 w-3.5" /> Plantillas
+                  <button type="button" onClick={() => setShowTemplates(true)} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
+                    <BookTemplate className="h-3.5 w-3.5" /> Usar plantilla
                   </button>
                 </div>
                 <textarea
-                  value={body}
-                  onChange={(e) => { setBody(e.target.value); setError(null); }}
-                  rows={7}
-                  maxLength={4096}
-                  placeholder="Escribe tu mensaje o carga una plantilla…"
+                  ref={textareaRef}
+                  value={message} onChange={(e) => setMessage(e.target.value)}
+                  onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); handleSend(); } }}
+                  rows={5} maxLength={4096} placeholder="Escribe tu mensaje…"
                   className="w-full rounded-md border border-input bg-background p-3 text-sm outline-none focus:ring-2 focus:ring-ring resize-none"
                 />
-                <div className="mt-1 flex justify-between text-xs text-muted-foreground">
-                  <span>{error && <span className="text-destructive">{error}</span>}</span>
-                  <span>{body.length}/4096</span>
+                <div className="flex justify-between items-center">
+                  <p className="text-xs text-muted-foreground">⌘/Ctrl+Enter para enviar</p>
+                  <p className="text-xs text-muted-foreground">{message.length}/4096</p>
                 </div>
               </div>
               <AttachmentPicker file={file} onChange={setFile} />
             </div>
-            <div className="border-t border-border p-4 flex gap-2">
-              <button onClick={onClose} className="flex-1 h-10 rounded-md border border-border text-sm font-medium hover:bg-accent">Cancelar</button>
+            <div className="px-5 py-4 border-t border-border shrink-0 flex gap-2">
+              <button type="button" onClick={onClose} className="flex-1 h-10 rounded-md border border-border text-sm font-medium hover:bg-accent transition-colors">Cancelar</button>
               <button
-                onClick={() => mutation.mutate()}
-                disabled={mutation.isPending || !body.trim()}
-                className="flex-1 h-10 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-60 inline-flex items-center justify-center gap-2"
+                type="button" onClick={handleSend} disabled={isSending}
+                className="flex-1 h-10 rounded-md bg-green-600 text-white text-sm font-medium hover:bg-green-700 disabled:opacity-60 inline-flex items-center justify-center gap-2 transition-colors"
               >
-                {mutation.isPending ? <><Loader2 className="h-4 w-4 animate-spin" /> Enviando…</> : <><Send className="h-4 w-4" /> Enviar mensaje</>}
+                {isSending ? <><Loader2 className="h-4 w-4 animate-spin" /> Enviando…</> : <><Send className="h-4 w-4" /> Enviar</>}
               </button>
             </div>
-          </div>
-        </div>
+          </>
+        )}
       </div>
     </div>
   );
 }
 
-// ─── Bulk compose sheet ───────────────────────────────────────────────────────
-type BulkResult = { nombre: string; phone: string; ok: boolean; error?: string };
-
-function BulkComposeSheet({ numComunidad, clientes, onClose }: { numComunidad: number; clientes: Cliente[]; onClose: () => void }) {
-  const send = useServerFn(sendWhatsAppMessage);
-  const qc = useQueryClient();
-  const [body, setBody] = useState("");
+// ─── Bulk compose modal ───────────────────────────────────────────────────────
+function BulkComposeModal({ num, clientes, onClose }: { num: number; clientes: Cliente[]; onClose: () => void }) {
+  const sendFn = useServerFn(sendWhatsAppMessage);
+  const eligible = clientes.filter((c) => !!c.Movil);
+  const [message, setMessage] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [showTemplates, setShowTemplates] = useState(false);
-  const [sending, setSending] = useState(false);
-  const [results, setResults] = useState<BulkResult[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState<{ sent: number; failed: number; total: number } | null>(null);
+  const [isSending, setIsSending] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  async function handleSend() {
-    const trimmed = body.trim();
-    if (!trimmed) { setError("El mensaje no puede estar vacío"); return; }
-    setSending(true); setResults(null); setError(null);
-    let adjunto_url: string | undefined, adjunto_nombre: string | undefined, adjunto_mime: string | undefined;
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) { if (e.key === "Escape" && !isSending) onClose(); }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose, isSending]);
+
+  useEffect(() => { textareaRef.current?.focus(); }, []);
+
+  async function handleBulkSend() {
+    if (!message.trim() && !file) { toast.error("Escribe un mensaje o adjunta un archivo"); return; }
+    if (!confirm(`¿Enviar a ${eligible.length} contacto${eligible.length !== 1 ? "s" : ""} de la Comunidad ${num}?`)) return;
+    setIsSending(true);
+    setProgress({ sent: 0, failed: 0, total: eligible.length });
+    let sent = 0; let failed = 0;
+    let mediaData: { base64: string; mimeType: string; fileName: string } | undefined;
     if (file) {
-      try {
-        const uploaded = await uploadAttachment(file);
-        adjunto_url = uploaded.url; adjunto_nombre = file.name; adjunto_mime = file.type;
-      } catch (e) {
-        setSending(false); setError(e instanceof Error ? e.message : "Error al subir el archivo"); return;
-      }
+      const buf = await file.arrayBuffer();
+      const bytes = new Uint8Array(buf);
+      let bin = ""; for (const b of bytes) bin += String.fromCharCode(b);
+      mediaData = { base64: btoa(bin), mimeType: file.type, fileName: file.name };
     }
-    const out: BulkResult[] = [];
-    for (const c of clientes) {
-      if (!c.Movil) continue;
+    for (const c of eligible) {
       try {
-        const res = await send({ data: { cliente_id: c.id, nombre_cliente: c.Nombre ?? "", recipient_phone: c.Movil, message_body: trimmed, adjunto_url, adjunto_nombre, adjunto_mime } });
-        out.push({ nombre: c.Nombre ?? c.Movil, phone: c.Movil, ok: res.ok, error: res.ok ? undefined : res.error });
-      } catch (e) {
-        out.push({ nombre: c.Nombre ?? c.Movil, phone: c.Movil, ok: false, error: e instanceof Error ? e.message : "Error" });
-      }
+        await sendFn({ data: { to: c.Movil!, message: message.trim(), media: mediaData } });
+        sent++;
+      } catch { failed++; }
+      setProgress({ sent, failed, total: eligible.length });
+      await new Promise((r) => setTimeout(r, 300));
     }
-    setSending(false); setResults(out);
-    const sent = out.filter((r) => r.ok).length;
-    const failed = out.filter((r) => !r.ok).length;
-    if (sent > 0) toast.success(`${sent} mensaje${sent !== 1 ? "s" : ""} enviado${sent !== 1 ? "s" : ""}`);
-    if (failed > 0) toast.error(`${failed} mensaje${failed !== 1 ? "s" : ""} fallido${failed !== 1 ? "s" : ""}`);
-    qc.invalidateQueries({ queryKey: ["messages-log"] });
-    qc.invalidateQueries({ queryKey: ["recent"] });
-    qc.invalidateQueries({ queryKey: ["stats"] });
+    setIsSending(false);
+    toast.success(`Envío completado: ${sent} enviado${sent !== 1 ? "s" : ""}, ${failed} fallido${failed !== 1 ? "s" : ""}`);
+    onClose();
   }
 
-  const done = results !== null && !sending;
-
   return (
-    <div className="fixed inset-0 z-40 flex">
-      <div className="absolute inset-0 bg-foreground/30 backdrop-blur-sm" onClick={!sending ? onClose : undefined} />
-      <div className="relative ml-auto h-full w-full max-w-lg bg-background border-l border-border shadow-2xl flex flex-col animate-in slide-in-from-right duration-200">
-        <div className="flex items-center justify-between px-5 h-16 border-b border-border">
-          <div>
-            <h3 className="font-semibold">Envío masivo — Comunidad {numComunidad}</h3>
-            <p className="text-xs text-muted-foreground">{clientes.length} destinatario{clientes.length !== 1 ? "s" : ""} con móvil</p>
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" role="dialog" aria-modal="true">
+      <div className="absolute inset-0 bg-foreground/30 backdrop-blur-sm" onClick={!isSending ? onClose : undefined} />
+      <div className="relative w-full max-w-lg bg-background rounded-t-2xl sm:rounded-2xl border border-border shadow-2xl flex flex-col max-h-[90vh] animate-in slide-in-from-bottom sm:fade-in duration-200">
+        {showTemplates ? (
+          <div className="flex-1 overflow-hidden">
+            <TemplatePicker onSelect={(cuerpo) => { setMessage(cuerpo); setShowTemplates(false); setTimeout(() => textareaRef.current?.focus(), 50); }} onClose={() => setShowTemplates(false)} />
           </div>
-          {!sending && <button onClick={onClose} className="grid place-items-center h-9 w-9 rounded-md hover:bg-accent"><X className="h-4 w-4" /></button>}
-        </div>
-        <div className="flex flex-1 min-h-0">
-          {showTemplates && (
-            <div className="w-72 border-r border-border flex flex-col overflow-hidden shrink-0">
-              <TemplatePicker onSelect={(cuerpo) => { setBody(cuerpo); setShowTemplates(false); }} onClose={() => setShowTemplates(false)} />
-            </div>
-          )}
-          <div className="flex-1 flex flex-col min-w-0">
-            <div className="p-5 space-y-4 flex-1 overflow-y-auto">
-              <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-1 max-h-36 overflow-y-auto">
-                <div className="text-xs text-muted-foreground font-medium mb-1">Destinatarios</div>
-                {clientes.map((c) => (
-                  <div key={c.id} className="flex items-center justify-between text-xs">
-                    <span className="truncate max-w-[55%]">{c.Nombre ?? "(sin nombre)"}</span>
-                    <span className="font-mono text-muted-foreground">{c.Movil}</span>
-                  </div>
-                ))}
-              </div>
-              {!done && (
+        ) : (
+          <>
+            <div className="flex items-center justify-between px-5 h-14 border-b border-border shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="grid place-items-center h-7 w-7 rounded-full bg-primary/10 text-primary">
+                  <Users className="h-3.5 w-3.5" />
+                </div>
                 <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-sm font-medium">Mensaje</label>
-                    <button type="button" onClick={() => setShowTemplates((v) => !v)} disabled={sending} className={`inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-xs font-medium transition-colors disabled:opacity-50 ${showTemplates ? "bg-primary text-primary-foreground" : "border border-border text-muted-foreground hover:bg-accent hover:text-foreground"}`}>
-                      <BookTemplate className="h-3.5 w-3.5" /> Plantillas
-                    </button>
-                  </div>
-                  <textarea value={body} onChange={(e) => { setBody(e.target.value); setError(null); }} rows={7} maxLength={4096} placeholder="Escribe tu mensaje para toda la comunidad…" disabled={sending} className="w-full rounded-md border border-input bg-background p-3 text-sm outline-none focus:ring-2 focus:ring-ring resize-none disabled:opacity-60" />
-                  <div className="mt-1 flex justify-between text-xs text-muted-foreground">
-                    <span>{error && <span className="text-destructive">{error}</span>}</span>
-                    <span>{body.length}/4096</span>
-                  </div>
+                  <p className="font-semibold text-sm">Comunidad {num}</p>
+                  <p className="text-xs text-muted-foreground">{eligible.length} de {clientes.length} tienen móvil</p>
+                </div>
+              </div>
+              {!isSending && <button onClick={onClose} aria-label="Cerrar" className="grid place-items-center h-8 w-8 rounded-md hover:bg-accent"><X className="h-4 w-4" /></button>}
+            </div>
+            <div className="p-5 space-y-4 flex-1 overflow-y-auto">
+              {eligible.length === 0 && (
+                <div className="rounded-md border border-amber-200 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-900/20 p-3 text-sm text-amber-800 dark:text-amber-300 flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  Ningún contacto de esta comunidad tiene número de móvil registrado.
                 </div>
               )}
-              {!done && <AttachmentPicker file={file} onChange={setFile} />}
-              {sending && <div className="flex items-center gap-3 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin text-primary" /> Enviando mensajes…</div>}
-              {results && (
-                <div className="space-y-2">
-                  <div className="text-sm font-medium">Resultado del envío</div>
-                  <ul className="divide-y divide-border rounded-lg border border-border overflow-hidden text-xs">
-                    {results.map((r, i) => (
-                      <li key={i} className={`px-3 py-2 flex items-center justify-between gap-2 ${r.ok ? "bg-background" : "bg-destructive/5"}`}>
-                        <span className="truncate max-w-[55%]">{r.nombre}</span>
-                        {r.ok ? <span className="text-green-600 font-medium shrink-0">✓ Enviado</span> : <span className="text-destructive truncate max-w-[40%]" title={r.error}>✗ {r.error ?? "Error"}</span>}
-                      </li>
-                    ))}
-                  </ul>
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium">Mensaje</label>
+                  <button type="button" onClick={() => setShowTemplates(true)} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
+                    <BookTemplate className="h-3.5 w-3.5" /> Usar plantilla
+                  </button>
+                </div>
+                <textarea
+                  ref={textareaRef}
+                  value={message} onChange={(e) => setMessage(e.target.value)}
+                  rows={5} maxLength={4096} placeholder="Escribe tu mensaje…"
+                  className="w-full rounded-md border border-input bg-background p-3 text-sm outline-none focus:ring-2 focus:ring-ring resize-none"
+                />
+                <div className="text-right text-xs text-muted-foreground">{message.length}/4096</div>
+              </div>
+              <AttachmentPicker file={file} onChange={setFile} />
+              {progress && (
+                <div className="space-y-1.5">
+                  <div className="h-2 rounded-full bg-muted overflow-hidden">
+                    <div
+                      className="h-full bg-primary transition-all duration-300"
+                      style={{ width: `${((progress.sent + progress.failed) / progress.total) * 100}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground text-center">
+                    {progress.sent + progress.failed} / {progress.total} · {progress.sent} ✓ · {progress.failed} ✗
+                  </p>
                 </div>
               )}
             </div>
-            <div className="border-t border-border p-4 flex gap-2">
-              <button onClick={onClose} disabled={sending} className="flex-1 h-10 rounded-md border border-border text-sm font-medium hover:bg-accent disabled:opacity-60">{done ? "Cerrar" : "Cancelar"}</button>
-              {!done && (
-                <button onClick={handleSend} disabled={sending || !body.trim()} className="flex-1 h-10 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-60 inline-flex items-center justify-center gap-2">
-                  {sending ? <><Loader2 className="h-4 w-4 animate-spin" /> Enviando…</> : <><Send className="h-4 w-4" /> Enviar a {clientes.length} contacto{clientes.length !== 1 ? "s" : ""}</>}
-                </button>
-              )}
+            <div className="px-5 py-4 border-t border-border shrink-0 flex gap-2">
+              <button type="button" onClick={onClose} disabled={isSending} className="flex-1 h-10 rounded-md border border-border text-sm font-medium hover:bg-accent disabled:opacity-50 transition-colors">Cancelar</button>
+              <button
+                type="button" onClick={handleBulkSend}
+                disabled={isSending || eligible.length === 0}
+                className="flex-1 h-10 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-60 inline-flex items-center justify-center gap-2 transition-colors"
+              >
+                {isSending ? <><Loader2 className="h-4 w-4 animate-spin" /> Enviando…</> : <><Send className="h-4 w-4" /> Enviar a {eligible.length}</>}
+              </button>
             </div>
-          </div>
-        </div>
+          </>
+        )}
       </div>
     </div>
   );
