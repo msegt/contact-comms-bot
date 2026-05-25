@@ -21,6 +21,11 @@ import {
   Users,
   ChevronDown,
   ChevronRight,
+  Paperclip,
+  FileText,
+  BookTemplate,
+  Pencil,
+  Check,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/Skeleton";
@@ -65,6 +70,28 @@ interface Cliente {
   Notas: string | null;
   NumComunidad: number | null;
   created_at: string;
+}
+
+interface Plantilla {
+  id: string;
+  nombre: string;
+  cuerpo: string;
+  descripcion: string | null;
+}
+
+const ACCEPTED_MIME =
+  "application/pdf,image/jpeg,image/png,image/gif,image/webp," +
+  "application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document," +
+  "application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
+
+function fileIcon(mime: string) {
+  if (mime === "application/pdf") return "PDF";
+  if (mime.startsWith("image/")) return "IMG";
+  if (mime.includes("word")) return "DOC";
+  if (mime.includes("excel") || mime.includes("spreadsheet")) return "XLS";
+  return "FILE";
 }
 
 const phoneRegex = /^\+[1-9]\d{6,14}$/;
@@ -130,6 +157,15 @@ async function fetchClientes(): Promise<Cliente[]> {
   return (data ?? []) as Cliente[];
 }
 
+async function fetchPlantillas(): Promise<Plantilla[]> {
+  const { data, error } = await supabase
+    .from("plantillas")
+    .select("id, nombre, cuerpo, descripcion")
+    .order("nombre", { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as Plantilla[];
+}
+
 // ─── NumComunidad combobox ───────────────────────────────────────────────────
 function NumComunidadCombobox({
   options,
@@ -146,7 +182,6 @@ function NumComunidadCombobox({
   const [query, setQuery] = useState(value);
   const ref = useRef<HTMLDivElement>(null);
 
-  // keep query in sync when value prop changes (e.g. form reset)
   useEffect(() => { setQuery(value); }, [value]);
 
   useEffect(() => {
@@ -198,6 +233,286 @@ function NumComunidadCombobox({
   );
 }
 
+// ─── Template picker panel ──────────────────────────────────────────────────
+function TemplatePicker({
+  onSelect,
+  onClose,
+}: {
+  onSelect: (cuerpo: string) => void;
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const { data: plantillas = [], isLoading } = useQuery({
+    queryKey: ["plantillas"],
+    queryFn: fetchPlantillas,
+  });
+
+  // Edit / create state
+  const [editing, setEditing] = useState<Plantilla | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [editNombre, setEditNombre] = useState("");
+  const [editCuerpo, setEditCuerpo] = useState("");
+  const [editDescripcion, setEditDescripcion] = useState("");
+  const [editError, setEditError] = useState<string | null>(null);
+
+  function startEdit(p: Plantilla) {
+    setEditing(p);
+    setEditNombre(p.nombre);
+    setEditCuerpo(p.cuerpo);
+    setEditDescripcion(p.descripcion ?? "");
+    setEditError(null);
+    setCreating(false);
+  }
+
+  function startCreate() {
+    setCreating(true);
+    setEditing(null);
+    setEditNombre("");
+    setEditCuerpo("");
+    setEditDescripcion("");
+    setEditError(null);
+  }
+
+  function cancelEdit() {
+    setEditing(null);
+    setCreating(false);
+    setEditError(null);
+  }
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      const nombre = editNombre.trim();
+      const cuerpo = editCuerpo.trim();
+      if (!nombre) throw new Error("El nombre es obligatorio");
+      if (!cuerpo) throw new Error("El cuerpo no puede estar vacío");
+      if (creating) {
+        const { error } = await supabase.from("plantillas").insert({
+          nombre,
+          cuerpo,
+          descripcion: editDescripcion.trim() || null,
+        });
+        if (error) throw error;
+      } else if (editing) {
+        const { error } = await supabase
+          .from("plantillas")
+          .update({ nombre, cuerpo, descripcion: editDescripcion.trim() || null })
+          .eq("id", editing.id);
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["plantillas"] });
+      cancelEdit();
+      toast.success(creating ? "Plantilla creada" : "Plantilla guardada");
+    },
+    onError: (e: Error) => setEditError(e.message),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("plantillas").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["plantillas"] });
+      toast.success("Plantilla eliminada");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const isFormOpen = creating || editing !== null;
+
+  return (
+    <div className="flex flex-col h-full">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+        <div className="flex items-center gap-2">
+          <BookTemplate className="h-4 w-4 text-muted-foreground" />
+          <span className="font-medium text-sm">Plantillas</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={startCreate}
+            className="h-7 px-2.5 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 inline-flex items-center gap-1"
+          >
+            <Plus className="h-3 w-3" /> Nueva
+          </button>
+          <button onClick={onClose} className="grid place-items-center h-7 w-7 rounded-md hover:bg-accent">
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto">
+        {/* Edit / create form */}
+        {isFormOpen && (
+          <div className="p-4 border-b border-border bg-muted/30 space-y-3">
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Nombre de la plantilla</label>
+              <input
+                value={editNombre}
+                onChange={(e) => { setEditNombre(e.target.value); setEditError(null); }}
+                placeholder="Ej. Aviso de reunión"
+                className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Descripción (opcional)</label>
+              <input
+                value={editDescripcion}
+                onChange={(e) => setEditDescripcion(e.target.value)}
+                placeholder="Breve descripción del uso…"
+                className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Cuerpo del mensaje</label>
+              <textarea
+                value={editCuerpo}
+                onChange={(e) => { setEditCuerpo(e.target.value); setEditError(null); }}
+                rows={5}
+                maxLength={4096}
+                placeholder="Texto de la plantilla…"
+                className="w-full rounded-md border border-input bg-background p-2.5 text-sm outline-none focus:ring-2 focus:ring-ring resize-none"
+              />
+              <div className="text-xs text-muted-foreground text-right">{editCuerpo.length}/4096</div>
+            </div>
+            {editError && <p className="text-xs text-destructive">{editError}</p>}
+            <div className="flex gap-2">
+              <button
+                onClick={cancelEdit}
+                className="flex-1 h-8 rounded-md border border-border text-xs font-medium hover:bg-accent"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => saveMutation.mutate()}
+                disabled={saveMutation.isPending}
+                className="flex-1 h-8 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 disabled:opacity-60 inline-flex items-center justify-center gap-1"
+              >
+                {saveMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                {creating ? "Crear" : "Guardar"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Plantilla list */}
+        {isLoading ? (
+          <div className="p-4 space-y-2">
+            {[1, 2, 3].map((i) => <Skeleton key={i} className="h-14 w-full" />)}
+          </div>
+        ) : plantillas.length === 0 ? (
+          <div className="p-6 text-center">
+            <FileText className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+            <p className="text-sm text-muted-foreground">No hay plantillas todavía.</p>
+            <p className="text-xs text-muted-foreground mt-1">Crea la primera con el botón "Nueva".</p>
+          </div>
+        ) : (
+          <ul className="divide-y divide-border">
+            {plantillas.map((p) => (
+              <li key={p.id} className="px-4 py-3 hover:bg-accent/40 group">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <button
+                      onClick={() => onSelect(p.cuerpo)}
+                      className="font-medium text-sm text-left hover:text-primary transition-colors w-full"
+                    >
+                      {p.nombre}
+                    </button>
+                    {p.descripcion && (
+                      <p className="text-xs text-muted-foreground mt-0.5">{p.descripcion}</p>
+                    )}
+                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2 italic">{p.cuerpo}</p>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={() => startEdit(p)}
+                      className="grid place-items-center h-7 w-7 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground"
+                      aria-label="Editar plantilla"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (confirm(`¿Eliminar la plantilla "${p.nombre}"?`)) deleteMutation.mutate(p.id);
+                      }}
+                      className="grid place-items-center h-7 w-7 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                      aria-label="Eliminar plantilla"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── File attachment picker ──────────────────────────────────────────────────
+function AttachmentPicker({
+  file,
+  onChange,
+}: {
+  file: File | null;
+  onChange: (f: File | null) => void;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+
+  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0] ?? null;
+    if (f && f.size > MAX_FILE_SIZE) {
+      toast.error("El archivo supera el límite de 50 MB");
+      e.target.value = "";
+      return;
+    }
+    onChange(f);
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <label className="text-sm font-medium">Adjunto (opcional)</label>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => ref.current?.click()}
+          className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-dashed border-border text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+        >
+          <Paperclip className="h-3.5 w-3.5" />
+          {file ? "Cambiar archivo" : "Adjuntar archivo"}
+        </button>
+        {file && (
+          <div className="flex items-center gap-1.5 text-xs bg-muted rounded-md px-2.5 py-1.5 min-w-0">
+            <span className="font-mono font-bold text-primary">{fileIcon(file.type)}</span>
+            <span className="truncate max-w-[160px]">{file.name}</span>
+            <span className="text-muted-foreground shrink-0">({(file.size / 1024).toFixed(0)} KB)</span>
+            <button
+              type="button"
+              onClick={() => { onChange(null); if (ref.current) ref.current.value = ""; }}
+              className="text-muted-foreground hover:text-destructive ml-1"
+              aria-label="Quitar adjunto"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+        )}
+      </div>
+      <input
+        ref={ref}
+        type="file"
+        accept={ACCEPTED_MIME}
+        onChange={handleChange}
+        className="sr-only"
+        aria-label="Seleccionar archivo adjunto"
+      />
+      <p className="text-xs text-muted-foreground">PDF, imágenes, Word, Excel · máx. 50 MB</p>
+    </div>
+  );
+}
+
 // ─── Main page ───────────────────────────────────────────────────────────────
 function ContactsPage() {
   const qc = useQueryClient();
@@ -211,7 +526,6 @@ function ContactsPage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [formError, setFormError] = useState<string | null>(null);
 
-  // search / filter state
   const [nameSearch, setNameSearch] = useState("");
   const [communityFilter, setCommunityFilter] = useState("");
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
@@ -223,7 +537,6 @@ function ContactsPage() {
     };
   }
 
-  // Derived data
   const communityNumbers = useMemo(() => {
     if (!data) return [];
     const nums = [...new Set(data.map((c) => c.NumComunidad).filter((n): n is number => n != null))];
@@ -246,7 +559,6 @@ function ContactsPage() {
     return list;
   }, [data, nameSearch, communityFilter]);
 
-  // Group by NumComunidad
   const grouped = useMemo(() => {
     const map = new Map<string, Cliente[]>();
     for (const c of filteredData) {
@@ -254,7 +566,6 @@ function ContactsPage() {
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(c);
     }
-    // Sort: numbered groups first (ascending), then the no-community group
     const entries = [...map.entries()].sort(([a], [b]) => {
       if (a === "__sin_comunidad__") return 1;
       if (b === "__sin_comunidad__") return -1;
@@ -351,7 +662,6 @@ function ContactsPage() {
       >
         <h2 className="font-medium">Añadir contacto</h2>
 
-        {/* Identification */}
         <fieldset className="space-y-3">
           <legend className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Identificación</legend>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -370,7 +680,6 @@ function ContactsPage() {
           </div>
         </fieldset>
 
-        {/* Personal */}
         <fieldset className="space-y-3">
           <legend className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Datos personales</legend>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -410,7 +719,6 @@ function ContactsPage() {
           </div>
         </fieldset>
 
-        {/* Contact */}
         <fieldset className="space-y-3">
           <legend className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Contacto</legend>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -452,7 +760,6 @@ function ContactsPage() {
           </div>
         </fieldset>
 
-        {/* Address */}
         <fieldset className="space-y-3">
           <legend className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Dirección</legend>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -482,7 +789,6 @@ function ContactsPage() {
           </div>
         </fieldset>
 
-        {/* Bajo */}
         <fieldset className="space-y-3">
           <legend className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Datos del bajo</legend>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -501,7 +807,6 @@ function ContactsPage() {
           </div>
         </fieldset>
 
-        {/* Pagadores */}
         <fieldset className="space-y-3">
           <legend className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Pagadores</legend>
           <div className="space-y-1">
@@ -510,7 +815,6 @@ function ContactsPage() {
           </div>
         </fieldset>
 
-        {/* Notes */}
         <fieldset className="space-y-2">
           <legend className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Notas</legend>
           <div className="relative">
@@ -535,14 +839,12 @@ function ContactsPage() {
 
       {/* ── Contact list ── */}
       <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
-        {/* Header + search/filter toolbar */}
         <div className="px-5 py-4 border-b border-border space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="font-medium">Todos los contactos</h2>
             <span className="text-xs text-muted-foreground">{filteredData.length} / {data?.length ?? 0}</span>
           </div>
           <div className="flex flex-col sm:flex-row gap-2">
-            {/* Name search */}
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
               <input
@@ -553,7 +855,6 @@ function ContactsPage() {
                 className="w-full h-9 pl-9 pr-3 rounded-md border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
-            {/* Community filter combobox */}
             <div className="sm:w-64">
               <NumComunidadCombobox
                 options={communityNumbers}
@@ -601,7 +902,6 @@ function ContactsPage() {
               const withPhone = members.filter((c) => c.Movil);
               return (
                 <div key={groupKey}>
-                  {/* Group header */}
                   <div className="px-5 py-2.5 bg-muted/40 flex items-center justify-between gap-3">
                     <button
                       onClick={() => toggleGroup(groupKey)}
@@ -631,7 +931,6 @@ function ContactsPage() {
                     )}
                   </div>
 
-                  {/* Members */}
                   {!collapsed && (
                     <ul className="divide-y divide-border">
                       {members.map((c) => (
@@ -702,10 +1001,7 @@ function ContactsPage() {
         )}
       </div>
 
-      {/* Individual compose sheet */}
       {composeFor && <ComposeSheet cliente={composeFor} onClose={() => setComposeFor(null)} />}
-
-      {/* Bulk compose sheet */}
       {composeBulk && (
         <BulkComposeSheet
           numComunidad={composeBulk.num}
@@ -717,17 +1013,41 @@ function ContactsPage() {
   );
 }
 
+// ─── Helper: upload a file to Supabase Storage ───────────────────────────────
+async function uploadAttachment(file: File): Promise<{ path: string; url: string }> {
+  const ext = file.name.split(".").pop() ?? "bin";
+  const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+  const { error } = await supabase.storage
+    .from("mensajes-adjuntos")
+    .upload(path, file, { contentType: file.type, upsert: false });
+  if (error) throw new Error(`Error al subir el archivo: ${error.message}`);
+  const { data } = supabase.storage.from("mensajes-adjuntos").getPublicUrl(path);
+  return { path, url: data.publicUrl };
+}
+
 // ─── Individual compose sheet ────────────────────────────────────────────────
 function ComposeSheet({ cliente, onClose }: { cliente: Cliente; onClose: () => void }) {
   const send = useServerFn(sendWhatsAppMessage);
   const qc = useQueryClient();
   const [body, setBody] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [showTemplates, setShowTemplates] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const mutation = useMutation({
     mutationFn: async () => {
       const trimmed = body.trim();
       if (!trimmed) throw new Error("El mensaje no puede estar vacío");
+
+      let adjunto_url: string | null = null;
+      let adjunto_nombre: string | null = null;
+
+      if (file) {
+        const uploaded = await uploadAttachment(file);
+        adjunto_url = uploaded.url;
+        adjunto_nombre = file.name;
+      }
+
       const res = await send({
         data: {
           cliente_id: cliente.id,
@@ -737,6 +1057,15 @@ function ComposeSheet({ cliente, onClose }: { cliente: Cliente; onClose: () => v
         },
       });
       if (!res.ok) throw new Error(res.error);
+
+      // Save adjunto metadata to the message record if present
+      if (adjunto_url && res.messageId) {
+        await supabase
+          .from("mensajes_whatsapp")
+          .update({ adjunto_url, adjunto_nombre })
+          .eq("whatsapp_message_id", res.messageId);
+      }
+
       return res;
     },
     onSuccess: () => {
@@ -762,41 +1091,84 @@ function ComposeSheet({ cliente, onClose }: { cliente: Cliente; onClose: () => v
             <X className="h-4 w-4" />
           </button>
         </div>
-        <div className="p-5 space-y-5 flex-1 overflow-y-auto">
-          <div className="rounded-lg border border-border bg-muted/30 p-3">
-            <div className="text-xs text-muted-foreground">Para</div>
-            <div className="font-medium mt-0.5">{cliente.Nombre ?? "(sin nombre)"}</div>
-            <div className="text-xs font-mono text-muted-foreground mt-0.5">{cliente.Movil}</div>
-            {cliente.NumComunidad != null && (
-              <div className="text-xs text-muted-foreground mt-0.5">Comunidad {cliente.NumComunidad}</div>
-            )}
-            {cliente.Nomdistri && <div className="text-xs text-muted-foreground mt-0.5">{cliente.Nomdistri}</div>}
-          </div>
-          <div>
-            <label className="text-sm font-medium">Mensaje</label>
-            <textarea
-              value={body}
-              onChange={(e) => { setBody(e.target.value); setError(null); }}
-              rows={8}
-              maxLength={4096}
-              placeholder="Escribe tu mensaje…"
-              className="mt-2 w-full rounded-md border border-input bg-background p-3 text-sm outline-none focus:ring-2 focus:ring-ring resize-none"
-            />
-            <div className="mt-1 flex justify-between text-xs text-muted-foreground">
-              <span>{error && <span className="text-destructive">{error}</span>}</span>
-              <span>{body.length}/4096</span>
+
+        {/* Split view when templates panel is open */}
+        <div className="flex flex-1 min-h-0">
+          {/* Templates side-panel */}
+          {showTemplates && (
+            <div className="w-72 border-r border-border flex flex-col overflow-hidden shrink-0">
+              <TemplatePicker
+                onSelect={(cuerpo) => {
+                  setBody(cuerpo);
+                  setShowTemplates(false);
+                }}
+                onClose={() => setShowTemplates(false)}
+              />
+            </div>
+          )}
+
+          {/* Compose area */}
+          <div className="flex-1 flex flex-col min-w-0">
+            <div className="p-5 space-y-4 flex-1 overflow-y-auto">
+              {/* Recipient */}
+              <div className="rounded-lg border border-border bg-muted/30 p-3">
+                <div className="text-xs text-muted-foreground">Para</div>
+                <div className="font-medium mt-0.5">{cliente.Nombre ?? "(sin nombre)"}</div>
+                <div className="text-xs font-mono text-muted-foreground mt-0.5">{cliente.Movil}</div>
+                {cliente.NumComunidad != null && (
+                  <div className="text-xs text-muted-foreground mt-0.5">Comunidad {cliente.NumComunidad}</div>
+                )}
+                {cliente.Nomdistri && <div className="text-xs text-muted-foreground mt-0.5">{cliente.Nomdistri}</div>}
+              </div>
+
+              {/* Message body */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-sm font-medium">Mensaje</label>
+                  <button
+                    type="button"
+                    onClick={() => setShowTemplates((v) => !v)}
+                    className={`inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-xs font-medium transition-colors ${
+                      showTemplates
+                        ? "bg-primary text-primary-foreground"
+                        : "border border-border text-muted-foreground hover:bg-accent hover:text-foreground"
+                    }`}
+                  >
+                    <BookTemplate className="h-3.5 w-3.5" />
+                    Plantillas
+                  </button>
+                </div>
+                <textarea
+                  value={body}
+                  onChange={(e) => { setBody(e.target.value); setError(null); }}
+                  rows={7}
+                  maxLength={4096}
+                  placeholder="Escribe tu mensaje o carga una plantilla…"
+                  className="w-full rounded-md border border-input bg-background p-3 text-sm outline-none focus:ring-2 focus:ring-ring resize-none"
+                />
+                <div className="mt-1 flex justify-between text-xs text-muted-foreground">
+                  <span>{error && <span className="text-destructive">{error}</span>}</span>
+                  <span>{body.length}/4096</span>
+                </div>
+              </div>
+
+              {/* Attachment */}
+              <AttachmentPicker file={file} onChange={setFile} />
+            </div>
+
+            <div className="border-t border-border p-4 flex gap-2">
+              <button onClick={onClose} className="flex-1 h-10 rounded-md border border-border text-sm font-medium hover:bg-accent">Cancelar</button>
+              <button
+                onClick={() => mutation.mutate()}
+                disabled={mutation.isPending || !body.trim()}
+                className="flex-1 h-10 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-60 inline-flex items-center justify-center gap-2"
+              >
+                {mutation.isPending
+                  ? <><Loader2 className="h-4 w-4 animate-spin" /> Enviando…</>
+                  : <><Send className="h-4 w-4" /> Enviar mensaje</>}
+              </button>
             </div>
           </div>
-        </div>
-        <div className="border-t border-border p-4 flex gap-2">
-          <button onClick={onClose} className="flex-1 h-10 rounded-md border border-border text-sm font-medium hover:bg-accent">Cancelar</button>
-          <button
-            onClick={() => mutation.mutate()}
-            disabled={mutation.isPending || !body.trim()}
-            className="flex-1 h-10 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-60 inline-flex items-center justify-center gap-2"
-          >
-            {mutation.isPending ? <><Loader2 className="h-4 w-4 animate-spin" /> Enviando…</> : <><Send className="h-4 w-4" /> Enviar mensaje</>}
-          </button>
         </div>
       </div>
     </div>
@@ -818,6 +1190,8 @@ function BulkComposeSheet({
   const send = useServerFn(sendWhatsAppMessage);
   const qc = useQueryClient();
   const [body, setBody] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [showTemplates, setShowTemplates] = useState(false);
   const [sending, setSending] = useState(false);
   const [results, setResults] = useState<BulkResult[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -828,6 +1202,21 @@ function BulkComposeSheet({
     setSending(true);
     setResults(null);
     setError(null);
+
+    // Upload attachment once for the whole batch
+    let adjunto_url: string | null = null;
+    let adjunto_nombre: string | null = null;
+    if (file) {
+      try {
+        const uploaded = await uploadAttachment(file);
+        adjunto_url = uploaded.url;
+        adjunto_nombre = file.name;
+      } catch (e) {
+        setSending(false);
+        setError(e instanceof Error ? e.message : "Error al subir el archivo");
+        return;
+      }
+    }
 
     const out: BulkResult[] = [];
     for (const c of clientes) {
@@ -841,6 +1230,12 @@ function BulkComposeSheet({
             message_body: trimmed,
           },
         });
+        if (res.ok && adjunto_url && res.messageId) {
+          await supabase
+            .from("mensajes_whatsapp")
+            .update({ adjunto_url, adjunto_nombre })
+            .eq("whatsapp_message_id", res.messageId);
+        }
         out.push({ nombre: c.Nombre ?? c.Movil, phone: c.Movil, ok: res.ok, error: res.ok ? undefined : res.error });
       } catch (e) {
         out.push({ nombre: c.Nombre ?? c.Movil, phone: c.Movil, ok: false, error: e instanceof Error ? e.message : "Error" });
@@ -863,7 +1258,7 @@ function BulkComposeSheet({
   return (
     <div className="fixed inset-0 z-40 flex">
       <div className="absolute inset-0 bg-foreground/30 backdrop-blur-sm" onClick={!sending ? onClose : undefined} />
-      <div className="relative ml-auto h-full w-full max-w-md bg-background border-l border-border shadow-2xl flex flex-col animate-in slide-in-from-right duration-200">
+      <div className="relative ml-auto h-full w-full max-w-lg bg-background border-l border-border shadow-2xl flex flex-col animate-in slide-in-from-right duration-200">
         <div className="flex items-center justify-between px-5 h-16 border-b border-border">
           <div>
             <h3 className="font-semibold">Envío masivo — Comunidad {numComunidad}</h3>
@@ -876,80 +1271,118 @@ function BulkComposeSheet({
           )}
         </div>
 
-        <div className="p-5 space-y-5 flex-1 overflow-y-auto">
-          {/* Recipients preview */}
-          <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-1 max-h-36 overflow-y-auto">
-            <div className="text-xs text-muted-foreground font-medium mb-1">Destinatarios</div>
-            {clientes.map((c) => (
-              <div key={c.id} className="flex items-center justify-between text-xs">
-                <span className="truncate max-w-[55%]">{c.Nombre ?? "(sin nombre)"}</span>
-                <span className="font-mono text-muted-foreground">{c.Movil}</span>
-              </div>
-            ))}
-          </div>
-
-          {/* Message */}
-          {!done && (
-            <div>
-              <label className="text-sm font-medium">Mensaje</label>
-              <textarea
-                value={body}
-                onChange={(e) => { setBody(e.target.value); setError(null); }}
-                rows={8}
-                maxLength={4096}
-                placeholder="Escribe tu mensaje para toda la comunidad…"
-                disabled={sending}
-                className="mt-2 w-full rounded-md border border-input bg-background p-3 text-sm outline-none focus:ring-2 focus:ring-ring resize-none disabled:opacity-60"
+        <div className="flex flex-1 min-h-0">
+          {/* Templates side-panel */}
+          {showTemplates && (
+            <div className="w-72 border-r border-border flex flex-col overflow-hidden shrink-0">
+              <TemplatePicker
+                onSelect={(cuerpo) => {
+                  setBody(cuerpo);
+                  setShowTemplates(false);
+                }}
+                onClose={() => setShowTemplates(false)}
               />
-              <div className="mt-1 flex justify-between text-xs text-muted-foreground">
-                <span>{error && <span className="text-destructive">{error}</span>}</span>
-                <span>{body.length}/4096</span>
-              </div>
             </div>
           )}
 
-          {/* Progress / results */}
-          {sending && (
-            <div className="flex items-center gap-3 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin text-primary" />
-              Enviando mensajes…
-            </div>
-          )}
-
-          {results && (
-            <div className="space-y-2">
-              <div className="text-sm font-medium">Resultado del envío</div>
-              <ul className="divide-y divide-border rounded-lg border border-border overflow-hidden text-xs">
-                {results.map((r, i) => (
-                  <li key={i} className={`px-3 py-2 flex items-center justify-between gap-2 ${r.ok ? "bg-background" : "bg-destructive/5"}`}>
-                    <span className="truncate max-w-[55%]">{r.nombre}</span>
-                    {r.ok ? (
-                      <span className="text-green-600 font-medium shrink-0">✓ Enviado</span>
-                    ) : (
-                      <span className="text-destructive truncate max-w-[40%]" title={r.error}>✗ {r.error ?? "Error"}</span>
-                    )}
-                  </li>
+          <div className="flex-1 flex flex-col min-w-0">
+            <div className="p-5 space-y-4 flex-1 overflow-y-auto">
+              {/* Recipients preview */}
+              <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-1 max-h-36 overflow-y-auto">
+                <div className="text-xs text-muted-foreground font-medium mb-1">Destinatarios</div>
+                {clientes.map((c) => (
+                  <div key={c.id} className="flex items-center justify-between text-xs">
+                    <span className="truncate max-w-[55%]">{c.Nombre ?? "(sin nombre)"}</span>
+                    <span className="font-mono text-muted-foreground">{c.Movil}</span>
+                  </div>
                 ))}
-              </ul>
-            </div>
-          )}
-        </div>
+              </div>
 
-        <div className="border-t border-border p-4 flex gap-2">
-          <button onClick={onClose} disabled={sending} className="flex-1 h-10 rounded-md border border-border text-sm font-medium hover:bg-accent disabled:opacity-60">
-            {done ? "Cerrar" : "Cancelar"}
-          </button>
-          {!done && (
-            <button
-              onClick={handleSend}
-              disabled={sending || !body.trim()}
-              className="flex-1 h-10 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-60 inline-flex items-center justify-center gap-2"
-            >
-              {sending
-                ? <><Loader2 className="h-4 w-4 animate-spin" /> Enviando…</>
-                : <><Send className="h-4 w-4" /> Enviar a {clientes.length} contacto{clientes.length !== 1 ? "s" : ""}</>}
-            </button>
-          )}
+              {/* Message + templates */}
+              {!done && (
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-sm font-medium">Mensaje</label>
+                    <button
+                      type="button"
+                      onClick={() => setShowTemplates((v) => !v)}
+                      disabled={sending}
+                      className={`inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-xs font-medium transition-colors disabled:opacity-50 ${
+                        showTemplates
+                          ? "bg-primary text-primary-foreground"
+                          : "border border-border text-muted-foreground hover:bg-accent hover:text-foreground"
+                      }`}
+                    >
+                      <BookTemplate className="h-3.5 w-3.5" />
+                      Plantillas
+                    </button>
+                  </div>
+                  <textarea
+                    value={body}
+                    onChange={(e) => { setBody(e.target.value); setError(null); }}
+                    rows={7}
+                    maxLength={4096}
+                    placeholder="Escribe tu mensaje para toda la comunidad o carga una plantilla…"
+                    disabled={sending}
+                    className="w-full rounded-md border border-input bg-background p-3 text-sm outline-none focus:ring-2 focus:ring-ring resize-none disabled:opacity-60"
+                  />
+                  <div className="mt-1 flex justify-between text-xs text-muted-foreground">
+                    <span>{error && <span className="text-destructive">{error}</span>}</span>
+                    <span>{body.length}/4096</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Attachment — only before send */}
+              {!done && (
+                <AttachmentPicker file={file} onChange={setFile} />
+              )}
+
+              {/* Progress */}
+              {sending && (
+                <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                  Enviando mensajes…
+                </div>
+              )}
+
+              {/* Results */}
+              {results && (
+                <div className="space-y-2">
+                  <div className="text-sm font-medium">Resultado del envío</div>
+                  <ul className="divide-y divide-border rounded-lg border border-border overflow-hidden text-xs">
+                    {results.map((r, i) => (
+                      <li key={i} className={`px-3 py-2 flex items-center justify-between gap-2 ${r.ok ? "bg-background" : "bg-destructive/5"}`}>
+                        <span className="truncate max-w-[55%]">{r.nombre}</span>
+                        {r.ok ? (
+                          <span className="text-green-600 font-medium shrink-0">✓ Enviado</span>
+                        ) : (
+                          <span className="text-destructive truncate max-w-[40%]" title={r.error}>✗ {r.error ?? "Error"}</span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+
+            <div className="border-t border-border p-4 flex gap-2">
+              <button onClick={onClose} disabled={sending} className="flex-1 h-10 rounded-md border border-border text-sm font-medium hover:bg-accent disabled:opacity-60">
+                {done ? "Cerrar" : "Cancelar"}
+              </button>
+              {!done && (
+                <button
+                  onClick={handleSend}
+                  disabled={sending || !body.trim()}
+                  className="flex-1 h-10 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-60 inline-flex items-center justify-center gap-2"
+                >
+                  {sending
+                    ? <><Loader2 className="h-4 w-4 animate-spin" /> Enviando…</>
+                    : <><Send className="h-4 w-4" /> Enviar a {clientes.length} contacto{clientes.length !== 1 ? "s" : ""}</>}
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>
