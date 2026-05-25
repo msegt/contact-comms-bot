@@ -25,13 +25,13 @@ interface MessageRow {
   enviado_at: string | null;
   updated_at: string;
   nombre_cliente: string;
-  clientes: { nombre: string; apellidos: string } | null;
+  clientes: { Nombre: string } | null;
 }
 
 async function fetchMensajes(): Promise<MessageRow[]> {
   const { data, error } = await supabase
     .from("mensajes_whatsapp")
-    .select("id, whatsapp_message_id, telefono_destino, mensaje, estado, enviado_at, updated_at, nombre_cliente, clientes(nombre, apellidos)")
+    .select("id, whatsapp_message_id, telefono_destino, mensaje, estado, enviado_at, updated_at, nombre_cliente, clientes(Nombre)")
     .order("enviado_at", { ascending: false })
     .limit(200);
   if (error) throw error;
@@ -87,9 +87,7 @@ function MessagesPage() {
                   <tr key={m.id} className="hover:bg-muted/20">
                     <td className="px-5 py-3 align-top">
                       <div className="font-medium">
-                        {m.clientes
-                          ? `${m.clientes.nombre} ${m.clientes.apellidos}`
-                          : m.nombre_cliente}
+                        {m.clientes ? m.clientes.Nombre : m.nombre_cliente}
                       </div>
                       <div className="text-xs font-mono text-muted-foreground">{m.telefono_destino}</div>
                     </td>

@@ -29,7 +29,7 @@ interface RecentMessage {
   mensaje: string;
   estado: string;
   enviado_at: string | null;
-  clientes: { nombre: string; apellidos: string } | null;
+  clientes: { Nombre: string } | null;
 }
 
 async function fetchStats(): Promise<Stats> {
@@ -64,7 +64,7 @@ async function fetchStats(): Promise<Stats> {
 async function fetchRecent(): Promise<RecentMessage[]> {
   const { data } = await supabase
     .from("mensajes_whatsapp")
-    .select("id, telefono_destino, mensaje, estado, enviado_at, clientes(nombre, apellidos)")
+    .select("id, telefono_destino, mensaje, estado, enviado_at, clientes(Nombre)")
     .order("enviado_at", { ascending: false })
     .limit(10);
   return (data ?? []) as unknown as RecentMessage[];
@@ -140,7 +140,7 @@ function DashboardPage() {
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-medium truncate">
-                      {m.clientes ? `${m.clientes.nombre} ${m.clientes.apellidos}` : m.telefono_destino}
+                      {m.clientes ? m.clientes.Nombre : m.telefono_destino}
                     </span>
                     <span className="text-xs text-muted-foreground">{m.telefono_destino}</span>
                   </div>
