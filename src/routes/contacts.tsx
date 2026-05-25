@@ -247,7 +247,6 @@ function TemplatePicker({
     queryFn: fetchPlantillas,
   });
 
-  // Edit / create state
   const [editing, setEditing] = useState<Plantilla | null>(null);
   const [creating, setCreating] = useState(false);
   const [editNombre, setEditNombre] = useState("");
@@ -343,7 +342,6 @@ function TemplatePicker({
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {/* Edit / create form */}
         {isFormOpen && (
           <div className="p-4 border-b border-border bg-muted/30 space-y-3">
             <div className="space-y-1">
@@ -396,7 +394,6 @@ function TemplatePicker({
           </div>
         )}
 
-        {/* Plantilla list */}
         {isLoading ? (
           <div className="p-4 space-y-2">
             {[1, 2, 3].map((i) => <Skeleton key={i} className="h-14 w-full" />)}
@@ -1017,11 +1014,12 @@ function ContactsPage() {
 async function uploadAttachment(file: File): Promise<{ path: string; url: string }> {
   const ext = file.name.split(".").pop() ?? "bin";
   const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+  // FIX: bucket name is "adjuntos", not "mensajes-adjuntos"
   const { error } = await supabase.storage
-    .from("mensajes-adjuntos")
+    .from("adjuntos")
     .upload(path, file, { contentType: file.type, upsert: false });
   if (error) throw new Error(`Error al subir el archivo: ${error.message}`);
-  const { data } = supabase.storage.from("mensajes-adjuntos").getPublicUrl(path);
+  const { data } = supabase.storage.from("adjuntos").getPublicUrl(path);
   return { path, url: data.publicUrl };
 }
 
@@ -1039,33 +1037,30 @@ function ComposeSheet({ cliente, onClose }: { cliente: Cliente; onClose: () => v
       const trimmed = body.trim();
       if (!trimmed) throw new Error("El mensaje no puede estar vacío");
 
-      let adjunto_url: string | null = null;
-      let adjunto_nombre: string | null = null;
+      let adjunto_url: string | undefined;
+      let adjunto_nombre: string | undefined;
+      let adjunto_mime: string | undefined;
 
       if (file) {
         const uploaded = await uploadAttachment(file);
         adjunto_url = uploaded.url;
         adjunto_nombre = file.name;
+        adjunto_mime = file.type;
       }
 
+      // FIX: pass attachment fields directly to the server function
       const res = await send({
         data: {
           cliente_id: cliente.id,
           nombre_cliente: cliente.Nombre ?? "",
           recipient_phone: cliente.Movil!,
           message_body: trimmed,
+          adjunto_url,
+          adjunto_nombre,
+          adjunto_mime,
         },
       });
       if (!res.ok) throw new Error(res.error);
-
-      // Save adjunto metadata to the message record if present
-      if (adjunto_url && res.messageId) {
-        await supabase
-          .from("mensajes_whatsapp")
-          .update({ adjunto_url, adjunto_nombre })
-          .eq("whatsapp_message_id", res.messageId);
-      }
-
       return res;
     },
     onSuccess: () => {
@@ -1092,9 +1087,7 @@ function ComposeSheet({ cliente, onClose }: { cliente: Cliente; onClose: () => v
           </button>
         </div>
 
-        {/* Split view when templates panel is open */}
         <div className="flex flex-1 min-h-0">
-          {/* Templates side-panel */}
           {showTemplates && (
             <div className="w-72 border-r border-border flex flex-col overflow-hidden shrink-0">
               <TemplatePicker
@@ -1107,10 +1100,8 @@ function ComposeSheet({ cliente, onClose }: { cliente: Cliente; onClose: () => v
             </div>
           )}
 
-          {/* Compose area */}
           <div className="flex-1 flex flex-col min-w-0">
             <div className="p-5 space-y-4 flex-1 overflow-y-auto">
-              {/* Recipient */}
               <div className="rounded-lg border border-border bg-muted/30 p-3">
                 <div className="text-xs text-muted-foreground">Para</div>
                 <div className="font-medium mt-0.5">{cliente.Nombre ?? "(sin nombre)"}</div>
@@ -1121,7 +1112,6 @@ function ComposeSheet({ cliente, onClose }: { cliente: Cliente; onClose: () => v
                 {cliente.Nomdistri && <div className="text-xs text-muted-foreground mt-0.5">{cliente.Nomdistri}</div>}
               </div>
 
-              {/* Message body */}
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="text-sm font-medium">Mensaje</label>
@@ -1152,7 +1142,6 @@ function ComposeSheet({ cliente, onClose }: { cliente: Cliente; onClose: () => v
                 </div>
               </div>
 
-              {/* Attachment */}
               <AttachmentPicker file={file} onChange={setFile} />
             </div>
 
@@ -1204,13 +1193,15 @@ function BulkComposeSheet({
     setError(null);
 
     // Upload attachment once for the whole batch
-    let adjunto_url: string | null = null;
-    let adjunto_nombre: string | null = null;
+    let adjunto_url: string | undefined;
+    let adjunto_nombre: string | undefined;
+    let adjunto_mime: string | undefined;
     if (file) {
       try {
         const uploaded = await uploadAttachment(file);
         adjunto_url = uploaded.url;
         adjunto_nombre = file.name;
+        adjunto_mime = file.type;
       } catch (e) {
         setSending(false);
         setError(e instanceof Error ? e.message : "Error al subir el archivo");
@@ -1222,20 +1213,18 @@ function BulkComposeSheet({
     for (const c of clientes) {
       if (!c.Movil) continue;
       try {
+        // FIX: pass attachment fields directly to the server function
         const res = await send({
           data: {
             cliente_id: c.id,
             nombre_cliente: c.Nombre ?? "",
             recipient_phone: c.Movil,
             message_body: trimmed,
+            adjunto_url,
+            adjunto_nombre,
+            adjunto_mime,
           },
         });
-        if (res.ok && adjunto_url && res.messageId) {
-          await supabase
-            .from("mensajes_whatsapp")
-            .update({ adjunto_url, adjunto_nombre })
-            .eq("whatsapp_message_id", res.messageId);
-        }
         out.push({ nombre: c.Nombre ?? c.Movil, phone: c.Movil, ok: res.ok, error: res.ok ? undefined : res.error });
       } catch (e) {
         out.push({ nombre: c.Nombre ?? c.Movil, phone: c.Movil, ok: false, error: e instanceof Error ? e.message : "Error" });
@@ -1272,7 +1261,6 @@ function BulkComposeSheet({
         </div>
 
         <div className="flex flex-1 min-h-0">
-          {/* Templates side-panel */}
           {showTemplates && (
             <div className="w-72 border-r border-border flex flex-col overflow-hidden shrink-0">
               <TemplatePicker
@@ -1287,7 +1275,6 @@ function BulkComposeSheet({
 
           <div className="flex-1 flex flex-col min-w-0">
             <div className="p-5 space-y-4 flex-1 overflow-y-auto">
-              {/* Recipients preview */}
               <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-1 max-h-36 overflow-y-auto">
                 <div className="text-xs text-muted-foreground font-medium mb-1">Destinatarios</div>
                 {clientes.map((c) => (
@@ -1298,7 +1285,6 @@ function BulkComposeSheet({
                 ))}
               </div>
 
-              {/* Message + templates */}
               {!done && (
                 <div>
                   <div className="flex items-center justify-between mb-1">
@@ -1333,12 +1319,10 @@ function BulkComposeSheet({
                 </div>
               )}
 
-              {/* Attachment — only before send */}
               {!done && (
                 <AttachmentPicker file={file} onChange={setFile} />
               )}
 
-              {/* Progress */}
               {sending && (
                 <div className="flex items-center gap-3 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin text-primary" />
@@ -1346,7 +1330,6 @@ function BulkComposeSheet({
                 </div>
               )}
 
-              {/* Results */}
               {results && (
                 <div className="space-y-2">
                   <div className="text-sm font-medium">Resultado del envío</div>
